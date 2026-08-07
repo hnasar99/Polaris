@@ -34,7 +34,7 @@ See [docs/privacy-model.md](../docs/privacy-model.md) and the Midnight concepts 
 ```
 midnight/
   README.md           ← this file (wiring checklist + placeholders)
-  contracts/          ← Compact source placeholders (conceptual notes only today)
+  contracts/          ← polaris-health.compact + witnesses/encoding
   generated/          ← compiler output only — do not hand-author
   integration/        ← how to wire src/lib/midnight + wallet adapters
 ```
@@ -77,8 +77,8 @@ Frontend contract (product path):
 
 ## Wiring checklist
 
-1. **Author Compact contracts** under `midnight/contracts/` with the official Compact toolchain (see conceptual notes in `contracts/README.md` — not compile-ready source).
-2. **Compile** into `midnight/generated/` (or `contracts/managed/...` then copy/link here). Do not invent binding shapes.
+1. **Compact source** is in `midnight/contracts/polaris-health.compact` (witnesses + encoding helpers alongside).
+2. **Compile** with the official Compact CLI: `npm run compact --prefix midnight/contracts` → `midnight/generated/polaris-health/`. Do not hand-author bindings.
 3. **Configure network + deployment address** (placeholders below).
 4. **Configure proof server** for the environment that generates proofs (e.g. local Docker on port 6300).
 5. **Map wallet provider** (1am / DApp Connector) onto `src/lib/wallet/WalletAdapter` using official APIs only.
@@ -93,9 +93,10 @@ Frontend contract (product path):
 
 | Item | Value |
 |------|--------|
+| Compact source | `midnight/contracts/polaris-health.compact` |
 | Contract deployment address | `_TBD_` |
 | Network (undeployed / preview / preprod / mainnet) | `_TBD_` |
-| Generated TypeScript bindings path | `midnight/generated/` (empty until compiler output) |
+| Generated TypeScript bindings path | `midnight/generated/polaris-health/` (empty until compiler output) |
 | Proof server URL | `_TBD_` (local default often `http://localhost:6300`) |
 | Wallet provider | 1am (official SDK mapping pending) |
 | Contract adapter entry | `src/lib/midnight/MidnightAdapter.ts` |

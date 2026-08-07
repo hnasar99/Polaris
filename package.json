@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "compact": "npm run compact --prefix midnight/contracts",
+    "compact:skip-zk": "npm run compact:skip-zk --prefix midnight/contracts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",

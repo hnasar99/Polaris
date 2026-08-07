@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Midnight Compact compiler output (keys / zkir / generated bindings)
+/midnight/generated/*/
+!/midnight/generated/README.md
+/midnight/contracts/node_modules/
+/midnight/contracts/src/managed/

@@ -44,7 +44,7 @@ Eligibility screen language: **PROVED** vs **NOT DISCLOSED**.
 - **Next.js** (App Router) + React + TypeScript + Tailwind CSS
 - **Supabase** — synthetic vault + UI projections only (anon/publishable key)
 - **Vitest** — application / demo-adapter tests (not Compact proof verification)
-- **Midnight** — `MidnightHealthProtocol` adapter boundary (`src/lib/midnight/`); Compact contracts under `midnight/` placeholders
+- **Midnight** — `MidnightHealthProtocol` adapter boundary (`src/lib/midnight/`); Compact source in `midnight/contracts/polaris-health.compact` (compile → wire `MidnightAdapter`)
 - **Wallet** — `WalletAdapter` boundary for future 1am / DApp Connector mapping (`src/lib/wallet/`)
 
 See [docs/architecture.md](./docs/architecture.md), [docs/privacy-model.md](./docs/privacy-model.md), and [midnight/README.md](./midnight/README.md).
@@ -135,7 +135,7 @@ npm run lint     # ESLint
 | `MidnightHealthProtocol` + factory | Implemented |
 | `MidnightAdapter` (real path) | Stub — throws `Midnight adapter not connected` |
 | `DemoMidnightAdapter` | Env-gated local evaluation only |
-| Compact source / generated bindings | Placeholders under `midnight/` — **not invented** |
+| Compact source | `midnight/contracts/polaris-health.compact` — compile with official toolchain; bindings in `midnight/generated/` |
 | Wallet | `MidnightDappConnectorAdapter` connects via `window.midnight`; `signAndSubmit` throws until prove/balance/submit wired. Demo uses `LocalDemoWalletAdapter`. |
 
 Wiring checklist: [midnight/README.md](./midnight/README.md).

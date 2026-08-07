@@ -21,9 +21,10 @@ Until those exist, this directory should contain **documentation only** (this RE
 ## App import policy
 
 ```
-midnight/contracts/*.compact  →  compact compile  →  midnight/generated/*
-                                                              ↓
-                                              MidnightAdapter (src/lib/midnight)
+midnight/contracts/polaris-health.compact
+        → compact compile
+        → midnight/generated/polaris-health/*
+        → MidnightAdapter (src/lib/midnight)
                                                               ↓
                                               createMidnightProtocol() factory
 ```

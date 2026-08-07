@@ -1,13 +1,29 @@
 # Adapter wiring notes
 
+## Compact source (authored)
+
+Contract: [`../contracts/polaris-health.compact`](../contracts/polaris-health.compact)
+
+| Protocol method | Circuit | Notes |
+|-----------------|---------|--------|
+| `createStudy` | `createStudy(studyId, minAge, requiredDiagnosis, minHba1cScaled, requiredTreatment, minTreatmentMonths, rewardAmount)` | Encode ids/codes via `../contracts/encoding.ts` |
+| `proveEligibility` | `proveEligibility(studyId) → Boolean` | Set medical fields in `PolarisPrivateState` witnesses first |
+| `grantConsent` | `grantConsent(studyId, purposeHash, scopeMask, expiresAt)` | `encodeConsentScope` + `hashPurpose`; Unix `expiresAt` |
+| `revokeConsent` | `revokeConsent(studyId)` | Patient secret must match grant |
+| `claimReward` | `claimReward(studyId)` | Requires eligibility nullifier + active unexpired consent |
+
+Compile: `npm run compact --prefix midnight/contracts` → `midnight/generated/polaris-health/`.
+
+Witness helpers: `../contracts/witnesses.ts` (`toPolarisPrivateState`, `witnesses`).
+
 ## MidnightAdapter
 
 Replace each `notConnected()` throw in `src/lib/midnight/MidnightAdapter.ts` with:
 
-1. Build witness from `EligibilityProofInput.privateWitness` (never log it).
-2. Invoke generated Compact binding for the circuit.
+1. Build `PolarisPrivateState` from `EligibilityProofInput.privateWitness` + 32-byte secret (never log it).
+2. Invoke generated Compact binding for the matching circuit above.
 3. Submit / verify via proof server + wallet providers (not a fake demo tx id).
-4. Return only `{ eligible, proofReference, transactionId }`.
+4. Return only sanitized results (`eligible` / `transactionId` / proof refs) — never medical fields.
 
 ## Wallet (DApp Connector → 1AM)
 

@@ -1,41 +1,27 @@
-# Compact contracts (placeholder)
+# Compact contracts (Polaris)
 
-This folder will hold **real Compact source** (`.compact` files) authored and compiled with the official Midnight Compact toolchain.
+Real Compact source for privacy-preserving research matching and programmable consent.
 
 ## Status
 
-- **No compile-ready Compact source is committed here.**
-- Do not add invented Compact that claims to compile for judging demos.
-- Conceptual design below informs future circuits; implementation must follow Compact book / Midnight docs at coding time.
+| Artifact | State |
+|----------|--------|
+| `polaris-health.compact` | Authored — compile with official Compact toolchain |
+| `witnesses.ts` / `encoding.ts` | Ready for adapter wiring after compile |
+| `../generated/polaris-health/` | Empty until `npm run compact` |
+| `MidnightAdapter` | Still throws until bindings are imported |
 
----
+## Contract map → app protocol
 
-## Intended contracts (conceptual)
+| Compact circuit | `MidnightHealthProtocol` | Private inputs | Public / ledger effects |
+|-----------------|--------------------------|----------------|-------------------------|
+| `createStudy` | `createStudy` | researcher `localSecretKey` | `studies[studyId]` + criteria + reward |
+| `proveEligibility` | `proveEligibility` | medical witnesses + secret | optional eligibility nullifier; returns `Boolean` |
+| `grantConsent` | `grantConsent` | patient secret | `consents[key]` ACTIVE + scope/expiry |
+| `revokeConsent` | `revokeConsent` | patient secret | consent → REVOKED, round++ |
+| `claimReward` | `claimReward` | patient secret | claim nullifier (once) |
 
-Polaris needs privacy-preserving circuits for research matching and programmable consent. Names below are **product concepts**, not committed file names or APIs.
-
-### 1. Eligibility circuit (Study matching)
-
-**Goal:** Prove a patient meets study criteria without revealing raw medical values on-chain.
-
-**Private inputs (witness world):**
-
-- age
-- diagnosis code
-- HbA1c (scaled integer)
-- treatment code
-- treatment months
-- issuer / credential authenticity material (production)
-- fresh nonces / secrets as required by commitment design
-
-**Public / intentional outputs (ledger or sanitized returns):**
-
-- study identifier (or study criteria commitment already on ledger)
-- eligibility result (boolean or status enum)
-- proof / transaction references consumed by the app
-- optional anonymous participation token (commitment / nullifier pattern)
-
-**Logical predicate (not Compact):**
+Study #001 logical predicate (enforced in `meetsCriteria`):
 
 ```
 age >= minAge
@@ -45,59 +31,66 @@ AND treatment == requiredTreatment
 AND treatmentMonths >= minTreatmentMonths
 ```
 
-**Privacy notes (design intent):**
+MVP thresholds live in `src/domain/study/study001.ts` and must be published via `createStudy` (encode codes with `encoding.ts`).
 
-- Medical attributes must not be circuit **arguments** that appear in the public transcript; they belong in witnesses.
-- Do not store per-patient labs in `export ledger`.
-- If membership / “already proved” must be anonymous, prefer Merkle membership over `Set.member` of a linkable identity.
-- Use domain-separated hashes/commits; never reuse nonces across commitments.
-- Always `assert` witness-derived values before trusting them in logic.
+## Privacy design
 
-### 2. Consent circuits (grant / revoke)
+- Medical attributes are **witnesses only** — never `export ledger` fields.
+- Ledger stores: study criteria (intentional public), consent status/scope/expiry, nullifiers.
+- Domain-separated `persistentHash` for patient/researcher/admin keys and nullifiers.
+- Eligibility and claim nullifiers use **different** domain separators.
+- `Set.member(nullifier)` reveals the nullifier, not labs or diagnosis.
+- Consent map keys are `consentKey(studyId, patientPk)` — DApp-derived identity, not wallet address and not medical data.
 
-**Goal:** Patient-controlled, scoped research access with revocation.
+## Compile
 
-**Private inputs:** patient authorization material (secret key / credential witness).
+Requires the official Midnight Compact compiler (language ≥ 0.23 / toolchain ≥ 0.31).
 
-**Public / intentional outputs:**
-
-- study id
-- researcher / scope / purpose / expiry (as designed for disclosure)
-- consent status: active / revoked / expired
-- transaction ids for UI projection
-
-**Design intent:**
-
-- Midnight is the **source of truth** for consent once wired.
-- Supabase `consent_views` remains a **UI projection** only — not SoT.
-- Grant and revoke should be separate circuits (or clearly separated entry points) so the public transcript’s meaning is intentional.
-- Replay protection (round counter, nullifier, or equivalent) should be part of the Compact design.
-
-### 3. Study publication + reward claim (related)
-
-- `createStudy` — publish criteria commitment / study metadata the eligibility circuit can bind to.
-- `claimReward` — prototype reward path (25 TEST) gated on eligibility + active consent; avoid leaking medical attributes in claim arguments.
-
-These map to `MidnightHealthProtocol` methods in `src/lib/midnight/protocol.ts`.
-
----
-
-## Compilation (when real source exists)
-
-Typical Compact compile shape (official toolchain; paths may vary by version):
+On Windows, install and run the compiler **inside WSL** (no native Windows Compact binary). Do not use System32 `compact.exe`.
 
 ```bash
-compact compile midnight/contracts/<name>.compact midnight/generated/<name>
+# from midnight/contracts (Linux / macOS / WSL)
+npm install
+npm run compact
+# or fast iteration:
+npm run compact:skip-zk
+
+# from repo root
+npm run compact
 ```
 
-Place **only compiler output** under `../generated/`. See [../generated/README.md](../generated/README.md).
+Output: `midnight/generated/polaris-health/` (keys, zkir, TypeScript `Contract` bindings).
 
-After compile, wire bindings in `src/lib/midnight/MidnightAdapter.ts` per [../integration/README.md](../integration/README.md).
+Then wire `src/lib/midnight/MidnightAdapter.ts` per [../integration/README.md](../integration/README.md).
 
----
+## Encoding conventions (TypeScript ↔ Compact)
 
-## Out of scope for this folder today
+| App value | Compact | Helper |
+|-----------|---------|--------|
+| `TYPE_2_DIABETES` / `METFORMIN` | `Bytes<32>` | `encodeCode` / Compact `pad(32, …)` |
+| Study UUID string | `Bytes<32>` SHA-256 | `encodeStudyId` |
+| Consent fields | `Uint<8>` bitmask | `encodeConsentScope` (`treatment`=bit0, `treatment_duration`=bit1) |
+| Purpose string | `Bytes<32>` SHA-256 | `hashPurpose` |
+| Expiry ISO date | `Uint<64>` Unix seconds | adapter converts |
 
-- Fake `.compact` files that look real but are unverified
-- Hand-written prover/verifier keys
-- Claiming on-chain deployment without a real address
+## Witness private state
+
+```ts
+type PolarisPrivateState = {
+  localSecretKey: Uint8Array; // 32 bytes
+  age: number;
+  diagnosis: string;
+  hba1cScaled: number;
+  treatment: string;
+  treatmentMonths: number;
+};
+```
+
+See `witnesses.ts` and `toPolarisPrivateState()`.
+
+## Out of scope (next)
+
+- Issuer attestation (Schnorr / trusted hospital signature) on medical witnesses
+- Unshielded/shielded token payout for `claimReward` (ledger nullifier only today)
+- Merkle-anonymous eligibility when `Set` linkability is unacceptable
+- Wiring `createStudy` into the researcher UI

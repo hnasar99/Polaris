@@ -1,0 +1,345 @@
+// Polaris Health — Compact contract for privacy-preserving research matching.
+//
+// Maps to MidnightHealthProtocol:
+//   createStudy | proveEligibility | grantConsent | revokeConsent | claimReward
+//
+// Privacy boundary:
+//   - Medical attributes enter ONLY via witnesses (never as public ledger fields).
+//   - Ledger holds study criteria, consent status, and unlinkable nullifiers.
+//   - Raw diagnosis / HbA1c / treatment / age never appear in export ledger.
+//
+// Compile (with official Midnight Compact toolchain):
+//   compact compile midnight/contracts/polaris-health.compact midnight/generated/polaris-health
+
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+export enum ConsentStatus {
+  NONE,
+  ACTIVE,
+  REVOKED
+}
+
+/**
+ * Study eligibility thresholds published by the researcher.
+ * These values are intentionally public (researchers advertise criteria).
+ */
+export struct StudyCriteria {
+  minAge: Uint<0..150>;
+  requiredDiagnosis: Bytes<32>;
+  minHba1cScaled: Uint<0..300>;
+  requiredTreatment: Bytes<32>;
+  minTreatmentMonths: Uint<0..600>;
+}
+
+export struct StudyRecord {
+  criteria: StudyCriteria;
+  rewardAmount: Uint<64>;
+  active: Boolean;
+  researcherPk: Bytes<32>;
+}
+
+export struct ConsentRecord {
+  status: ConsentStatus;
+  researcherPk: Bytes<32>;
+  purposeHash: Bytes<32>;
+  /** bit0 = treatment, bit1 = treatment_duration */
+  scopeMask: Uint<8>;
+  /** Unix seconds; consent invalid when blockTimeGte(expiresAt). */
+  expiresAt: Uint<64>;
+  /** Increments on revoke — replay / state version. */
+  round: Uint<64>;
+}
+
+// ---------------------------------------------------------------------------
+// Public ledger (plaintext on-chain — never store raw medical values here)
+// ---------------------------------------------------------------------------
+
+export sealed ledger adminPk: Bytes<32>;
+
+export ledger studies: Map<Bytes<32>, StudyRecord>;
+
+/** Key = consentKey(studyId, patientPk). Value never includes medical fields. */
+export ledger consents: Map<Bytes<32>, ConsentRecord>;
+
+/**
+ * Eligibility nullifiers (Set reveals the nullifier, not medical attributes).
+ * Domain-separated from claim nullifiers.
+ */
+export ledger eligibilityNullifiers: Set<Bytes<32>>;
+
+/** Single-claim nullifiers per (study, patient secret). */
+export ledger rewardClaims: Set<Bytes<32>>;
+
+export ledger studyCount: Counter;
+export ledger eligibilityProofCount: Counter;
+export ledger consentGrantCount: Counter;
+export ledger rewardClaimCount: Counter;
+
+// ---------------------------------------------------------------------------
+// Witnesses — private inputs (bodies implemented in TypeScript)
+// ---------------------------------------------------------------------------
+
+/** Patient / researcher DApp secret (32 bytes). Never disclosed. */
+witness localSecretKey(): Bytes<32>;
+
+/** Private medical witness fields for Study #001-style predicates. */
+witness patientAge(): Uint<0..150>;
+witness patientDiagnosis(): Bytes<32>;
+witness patientHba1cScaled(): Uint<0..300>;
+witness patientTreatment(): Bytes<32>;
+witness patientTreatmentMonths(): Uint<0..600>;
+
+// ---------------------------------------------------------------------------
+// Constructor
+// ---------------------------------------------------------------------------
+
+constructor(adminSecret: Bytes<32>) {
+  adminPk = disclose(deriveAdminPk(adminSecret));
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers (domain-separated identity / nullifiers)
+// ---------------------------------------------------------------------------
+
+pure circuit deriveAdminPk(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([
+    pad(32, "polaris:admin:pk:v1"),
+    sk
+  ]);
+}
+
+pure circuit derivePatientPk(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([
+    pad(32, "polaris:patient:pk:v1"),
+    sk
+  ]);
+}
+
+pure circuit deriveResearcherPk(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([
+    pad(32, "polaris:researcher:pk:v1"),
+    sk
+  ]);
+}
+
+pure circuit consentKey(studyId: Bytes<32>, patientPk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "polaris:consent:key:v1"),
+    studyId,
+    patientPk
+  ]);
+}
+
+pure circuit eligibilityNullifier(studyId: Bytes<32>, sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "polaris:elig:nul:v1"),
+    studyId,
+    sk
+  ]);
+}
+
+pure circuit claimNullifier(studyId: Bytes<32>, sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "polaris:claim:nul:v1"),
+    studyId,
+    sk
+  ]);
+}
+
+/**
+ * Logical eligibility predicate (mirrors DemoMidnightAdapter / Study #001).
+ * All medical values remain witness-local.
+ */
+circuit meetsCriteria(criteria: StudyCriteria): Boolean {
+  const age = patientAge();
+  const diagnosis = patientDiagnosis();
+  const hba1c = patientHba1cScaled();
+  const treatment = patientTreatment();
+  const months = patientTreatmentMonths();
+
+  return age >= criteria.minAge
+    && diagnosis == criteria.requiredDiagnosis
+    && hba1c >= criteria.minHba1cScaled
+    && treatment == criteria.requiredTreatment
+    && months >= criteria.minTreatmentMonths;
+}
+
+// ---------------------------------------------------------------------------
+// Circuits — MidnightHealthProtocol entry points
+// ---------------------------------------------------------------------------
+
+/**
+ * Publish a study and its public criteria commitment surface.
+ * Researcher identity is a DApp-derived public key (not a wallet address).
+ */
+export circuit createStudy(
+  studyId: Bytes<32>,
+  minAge: Uint<0..150>,
+  requiredDiagnosis: Bytes<32>,
+  minHba1cScaled: Uint<0..300>,
+  requiredTreatment: Bytes<32>,
+  minTreatmentMonths: Uint<0..600>,
+  rewardAmount: Uint<64>
+): [] {
+  const pubStudyId = disclose(studyId);
+  assert(!studies.member(pubStudyId), "study already exists");
+  assert(disclose(rewardAmount) > 0, "reward must be positive");
+
+  const researcherPk = disclose(deriveResearcherPk(localSecretKey()));
+
+  const criteria = StudyCriteria {
+    minAge: disclose(minAge),
+    requiredDiagnosis: disclose(requiredDiagnosis),
+    minHba1cScaled: disclose(minHba1cScaled),
+    requiredTreatment: disclose(requiredTreatment),
+    minTreatmentMonths: disclose(minTreatmentMonths)
+  };
+
+  studies.insert(
+    pubStudyId,
+    StudyRecord {
+      criteria: criteria,
+      rewardAmount: disclose(rewardAmount),
+      active: true,
+      researcherPk: researcherPk
+    }
+  );
+  studyCount.increment(1 as Uint<16>);
+}
+
+/**
+ * Prove eligibility against on-chain study criteria without disclosing medical values.
+ *
+ * Returns whether the private witness meets criteria.
+ * On success, records an eligibility nullifier (not the medical attributes).
+ */
+export circuit proveEligibility(studyId: Bytes<32>): Boolean {
+  const pubStudyId = disclose(studyId);
+  assert(studies.member(pubStudyId), "study not found");
+
+  const study = studies.lookup(pubStudyId);
+  assert(study.active, "study inactive");
+
+  const eligible = meetsCriteria(study.criteria);
+
+  if (disclose(eligible)) {
+    const sk = localSecretKey();
+    const nul = disclose(eligibilityNullifier(pubStudyId, sk));
+    assert(!eligibilityNullifiers.member(nul), "eligibility already proved");
+    eligibilityNullifiers.insert(nul);
+    eligibilityProofCount.increment(1 as Uint<16>);
+  }
+
+  return disclose(eligible);
+}
+
+/**
+ * Grant scoped research consent. Requires a prior successful eligibility proof
+ * for the same study (eligibility nullifier present).
+ *
+ * scopeMask: bit0 = treatment, bit1 = treatment_duration
+ */
+export circuit grantConsent(
+  studyId: Bytes<32>,
+  purposeHash: Bytes<32>,
+  scopeMask: Uint<8>,
+  expiresAt: Uint<64>
+): [] {
+  const pubStudyId = disclose(studyId);
+  assert(studies.member(pubStudyId), "study not found");
+
+  const study = studies.lookup(pubStudyId);
+  assert(study.active, "study inactive");
+  assert(disclose(expiresAt) > 0, "expiry required");
+  assert(disclose(scopeMask) > 0, "scope required");
+
+  const sk = localSecretKey();
+  const eligNul = disclose(eligibilityNullifier(pubStudyId, sk));
+  assert(eligibilityNullifiers.member(eligNul), "eligibility proof required");
+
+  const patientPk = derivePatientPk(sk);
+  const key = disclose(consentKey(pubStudyId, patientPk));
+
+  if (consents.member(key)) {
+    const existing = consents.lookup(key);
+    assert(existing.status != ConsentStatus.ACTIVE, "consent already active");
+  }
+
+  consents.insert(
+    key,
+    ConsentRecord {
+      status: ConsentStatus.ACTIVE,
+      researcherPk: study.researcherPk,
+      purposeHash: disclose(purposeHash),
+      scopeMask: disclose(scopeMask),
+      expiresAt: disclose(expiresAt),
+      round: 1 as Uint<64>
+    }
+  );
+  consentGrantCount.increment(1 as Uint<16>);
+}
+
+/**
+ * Patient-only revocation. Increments consent round for replay hygiene.
+ */
+export circuit revokeConsent(studyId: Bytes<32>): [] {
+  const pubStudyId = disclose(studyId);
+  const sk = localSecretKey();
+  const patientPk = derivePatientPk(sk);
+  const key = disclose(consentKey(pubStudyId, patientPk));
+
+  assert(consents.member(key), "consent not found");
+  const existing = consents.lookup(key);
+  assert(existing.status == ConsentStatus.ACTIVE, "consent not active");
+
+  consents.insert(
+    key,
+    ConsentRecord {
+      status: ConsentStatus.REVOKED,
+      researcherPk: existing.researcherPk,
+      purposeHash: existing.purposeHash,
+      scopeMask: existing.scopeMask,
+      expiresAt: existing.expiresAt,
+      round: disclose((existing.round + 1) as Uint<64>)
+    }
+  );
+}
+
+/**
+ * Claim the study reward once: requires eligibility nullifier + active, unexpired consent.
+ * Records a claim nullifier; does not mint/transfer tokens in this MVP circuit
+ * (UI tracks 25 TEST prototype off the sanitized TransactionResult).
+ */
+export circuit claimReward(studyId: Bytes<32>): [] {
+  const pubStudyId = disclose(studyId);
+  assert(studies.member(pubStudyId), "study not found");
+
+  const study = studies.lookup(pubStudyId);
+  assert(study.active, "study inactive");
+
+  const sk = localSecretKey();
+  const eligNul = disclose(eligibilityNullifier(pubStudyId, sk));
+  assert(eligibilityNullifiers.member(eligNul), "eligibility proof required");
+
+  const patientPk = derivePatientPk(sk);
+  const cKey = disclose(consentKey(pubStudyId, patientPk));
+  assert(consents.member(cKey), "consent required");
+
+  const consent = consents.lookup(cKey);
+  assert(consent.status == ConsentStatus.ACTIVE, "active consent required");
+  assert(!blockTimeGte(consent.expiresAt), "consent expired");
+
+  const claimNul = disclose(claimNullifier(pubStudyId, sk));
+  assert(!rewardClaims.member(claimNul), "reward already claimed");
+  rewardClaims.insert(claimNul);
+  rewardClaimCount.increment(1 as Uint<16>);
+
+  // Keep study.rewardAmount constrained so unused public criteria can't drift silently.
+  assert(study.rewardAmount > 0, "reward misconfigured");
+}

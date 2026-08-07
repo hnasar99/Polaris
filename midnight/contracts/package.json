@@ -1,0 +1,13 @@
+{
+  "name": "@polaris/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compact": "compact compile polaris-health.compact ../generated/polaris-health",
+    "compact:skip-zk": "compact compile --skip-zk polaris-health.compact ../generated/polaris-health"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.16.0"
+  }
+}
