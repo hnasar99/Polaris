@@ -92,6 +92,7 @@ Copy [`.env.example`](./.env.example):
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (optional for local fallback) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable/anon key only — **never** service-role in the client |
 | `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT` | `true` enables local **DEMO PRIVACY ENGINE**; default path uses `MidnightAdapter` (throws until real bindings) |
+| `NEXT_PUBLIC_MIDNIGHT_NETWORK` | DApp Connector network id (`undeployed` \| `preview` \| `preprod` \| `mainnet`); default `preprod` |
 
 ### Demo walkthrough (no Compact yet)
 
@@ -119,6 +120,7 @@ Vitest covers application and demo-adapter logic only. Compact / proof verificat
 
 ```bash
 npm run dev      # development server
+npm test         # Vitest
 npm run build    # production build
 npm run start    # start production server
 npm run lint     # ESLint
@@ -134,7 +136,7 @@ npm run lint     # ESLint
 | `MidnightAdapter` (real path) | Stub — throws `Midnight adapter not connected` |
 | `DemoMidnightAdapter` | Env-gated local evaluation only |
 | Compact source / generated bindings | Placeholders under `midnight/` — **not invented** |
-| 1am wallet APIs | Adapter interface only — no invented SDK calls |
+| Wallet | `MidnightDappConnectorAdapter` connects via `window.midnight`; `signAndSubmit` throws until prove/balance/submit wired. Demo uses `LocalDemoWalletAdapter`. |
 
 Wiring checklist: [midnight/README.md](./midnight/README.md).
 

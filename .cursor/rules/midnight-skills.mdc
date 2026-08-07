@@ -1,0 +1,22 @@
+---
+description: Use Midnight-Skills for all Midnight/Compact/wallet work on Polaris
+alwaysApply: true
+---
+
+# Midnight-Skills (required)
+
+For any Midnight Network, Compact, wallet, ZK, or privacy-boundary work:
+
+1. Read `.agents/skills/midnightskill/SKILL.md` first (router).
+2. Then read only the matching skill under `.agents/skills/<name>/SKILL.md` (also mirrored in `.cursor/skills/`).
+
+| Task | Skills |
+|------|--------|
+| Wallet connect / 1AM | `react-wallet-connector`, `1am-wallet` |
+| SDK / adapters / txs | `midnight-js`, `midnight-transactions` |
+| Compact / contracts docs | `compact` |
+| Privacy / medical leaks | `midnight-security`, `why-midnight` |
+| Tests | `testing` |
+| Env / proof server | `midnight-environment-setup` |
+
+Constraints: do not invent Compact syntax, generated bindings, or 1am APIs. `MidnightAdapter` throws until connected; demo path only with `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true`.
