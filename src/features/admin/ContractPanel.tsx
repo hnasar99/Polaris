@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Badge, Button, Card, Field, SectionHeader, inputClass } from "@/components/ui";
+import { DeployProgressPanel } from "@/features/admin/DeployProgressPanel";
 import { useWallet } from "@/features/wallet/WalletProvider";
 import { useI18n } from "@/i18n";
 
@@ -45,6 +46,7 @@ export function ContractPanel() {
             </p>
           </div>
           <p className="text-xs text-slate-500">{t("admin.deploySavedHint")}</p>
+          <DeployProgressPanel />
           <Button variant="ghost" onClick={forgetContractAddress}>
             {t("contract.clear")}
           </Button>
@@ -67,6 +69,7 @@ export function ContractPanel() {
           >
             {isDeploying ? t("contract.deploying") : t("contract.deploy")}
           </Button>
+          <DeployProgressPanel />
           <p className="text-xs text-slate-500">{t("contract.deployHint")}</p>
 
           <Field label={t("contract.join")}>

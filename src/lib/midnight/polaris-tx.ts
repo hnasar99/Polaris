@@ -8,6 +8,10 @@ import { loadPolarisBindings } from "@/lib/midnight/bindings";
 import { POLARIS_PRIVATE_STATE_ID } from "@/lib/midnight/constants";
 import type { ConnectedSession } from "@/lib/midnight/session";
 import { MidnightAdapterError } from "@/lib/midnight/errors";
+import {
+  createDeployProgressTracker,
+  type DeployProgressCallback,
+} from "@/lib/midnight/deploy-progress";
 
 export type CircuitCallResult = {
   transactionId: string;
@@ -71,8 +75,21 @@ export async function persistPrivateState(
 export async function deployPolarisHealth(
   session: ConnectedSession,
   adminSecret: Uint8Array,
+  onProgress?: DeployProgressCallback,
 ): Promise<string> {
-  const compiledContract = await requireCompiledContract();
+  const tracker = onProgress
+    ? createDeployProgressTracker(onProgress)
+    : null;
+
+  const compiledContract = tracker
+    ? await tracker.run(
+        "bindings",
+        () => requireCompiledContract(),
+        "Loading Compact bindings…",
+        "Bindings loaded",
+      )
+    : await requireCompiledContract();
+
   const { createUnprovenDeployTx, submitTxAsync } = await import(
     "@midnight-ntwrk/midnight-js-contracts"
   );
@@ -87,39 +104,94 @@ export async function deployPolarisHealth(
     treatmentMonths: 0,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deployTxData = await (createUnprovenDeployTx as any)(
-    {
-      zkConfigProvider: session.providers.zkConfigProvider,
-      walletProvider: session.providers.walletProvider,
-    },
-    {
-      compiledContract,
-      args: [adminSecret],
-      privateStateId: POLARIS_PRIVATE_STATE_ID,
-      initialPrivateState,
-      signingKey: sampleSigningKey(),
-    },
-  );
+  const deployTxData = tracker
+    ? await tracker.run(
+        "createTx",
+        async () =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (createUnprovenDeployTx as any)(
+            {
+              zkConfigProvider: session.providers.zkConfigProvider,
+              walletProvider: session.providers.walletProvider,
+            },
+            {
+              compiledContract,
+              args: [adminSecret],
+              privateStateId: POLARIS_PRIVATE_STATE_ID,
+              initialPrivateState,
+              signingKey: sampleSigningKey(),
+            },
+          ),
+        "Creating unproven deploy transaction…",
+      )
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (createUnprovenDeployTx as any)(
+        {
+          zkConfigProvider: session.providers.zkConfigProvider,
+          walletProvider: session.providers.walletProvider,
+        },
+        {
+          compiledContract,
+          args: [adminSecret],
+          privateStateId: POLARIS_PRIVATE_STATE_ID,
+          initialPrivateState,
+          signingKey: sampleSigningKey(),
+        },
+      );
 
   const contractAddress = deployTxData.public.contractAddress as string;
+  tracker?.log("info", `Contract address: ${contractAddress}`);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (submitTxAsync as any)(session.providers, {
-    unprovenTx: deployTxData.private.unprovenTx,
-  });
+  if (tracker) {
+    await tracker.run(
+      "submit",
+      async () =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (submitTxAsync as any)(session.providers, {
+          unprovenTx: deployTxData.private.unprovenTx,
+        }),
+      "Proving and submitting via wallet…",
+      "Transaction submitted",
+    );
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (submitTxAsync as any)(session.providers, {
+      unprovenTx: deployTxData.private.unprovenTx,
+    });
+  }
 
-  await session.providers.privateStateProvider.setContractAddress(
-    contractAddress,
-  );
-  await session.providers.privateStateProvider.set(
-    POLARIS_PRIVATE_STATE_ID,
-    initialPrivateState,
-  );
-  await session.providers.privateStateProvider.setSigningKey(
-    contractAddress,
-    deployTxData.private.signingKey,
-  );
+  if (tracker) {
+    await tracker.run(
+      "persist",
+      async () => {
+        await session.providers.privateStateProvider.setContractAddress(
+          contractAddress,
+        );
+        await session.providers.privateStateProvider.set(
+          POLARIS_PRIVATE_STATE_ID,
+          initialPrivateState,
+        );
+        await session.providers.privateStateProvider.setSigningKey(
+          contractAddress,
+          deployTxData.private.signingKey,
+        );
+      },
+      "Persisting private state…",
+      "Private state saved",
+    );
+  } else {
+    await session.providers.privateStateProvider.setContractAddress(
+      contractAddress,
+    );
+    await session.providers.privateStateProvider.set(
+      POLARIS_PRIVATE_STATE_ID,
+      initialPrivateState,
+    );
+    await session.providers.privateStateProvider.setSigningKey(
+      contractAddress,
+      deployTxData.private.signingKey,
+    );
+  }
 
   return contractAddress;
 }

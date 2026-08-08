@@ -132,6 +132,16 @@ export const en: Messages = {
     deployHint:
       "Deploying writes the address to this browser so the app reuses it after a reload.",
     clear: "Forget address",
+    deployLog: "Deployment log",
+    deployStatusRunning: "In progress",
+    deployStatusSuccess: "Complete",
+    deployStatusFailed: "Failed",
+    stepSession: "Wallet session",
+    stepBindings: "Compact bindings",
+    stepCreateTx: "Create deploy transaction",
+    stepSubmit: "Prove and submit",
+    stepPersist: "Persist private state",
+    stepSaveAddress: "Save contract address",
   },
   setup: {
     title: "Real circuits are not active yet",

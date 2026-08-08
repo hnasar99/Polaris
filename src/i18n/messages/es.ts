@@ -133,6 +133,16 @@ export const es = {
     deployHint:
       "Al desplegar se guarda la dirección en este navegador para reusarla después de recargar.",
     clear: "Olvidar dirección",
+    deployLog: "Log de despliegue",
+    deployStatusRunning: "En curso",
+    deployStatusSuccess: "Completado",
+    deployStatusFailed: "Falló",
+    stepSession: "Sesión de billetera",
+    stepBindings: "Bindings Compact",
+    stepCreateTx: "Crear transacción de deploy",
+    stepSubmit: "Probar y enviar",
+    stepPersist: "Persistir estado privado",
+    stepSaveAddress: "Guardar dirección del contrato",
   },
   setup: {
     title: "Los circuitos reales todavía no están activos",

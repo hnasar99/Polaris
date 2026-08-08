@@ -66,7 +66,8 @@ export function createMidnightProtocol(): MidnightHealthProtocol {
 /** Deploy / join are only available on the real adapter. */
 export async function deployPolarisContract(
   adminSecret?: Uint8Array,
+  onProgress?: import("@/lib/midnight/deploy-progress").DeployProgressCallback,
 ): Promise<string> {
   const { MidnightAdapter } = await import("@/lib/midnight/MidnightAdapter");
-  return new MidnightAdapter().deploy(adminSecret);
+  return new MidnightAdapter().deploy(adminSecret, onProgress);
 }

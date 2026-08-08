@@ -45,6 +45,10 @@ import {
 } from "@/lib/midnight/lab-identity";
 import { callPolarisCircuit, deployPolarisHealth } from "@/lib/midnight/polaris-tx";
 import {
+  createDeployProgressTracker,
+  type DeployProgressCallback,
+} from "@/lib/midnight/deploy-progress";
+import {
   readPolarisLedger,
   type OnChainStudy,
   type PolarisLedgerView,
@@ -90,13 +94,45 @@ export class MidnightAdapter implements MidnightHealthProtocol {
     clearMidnightRuntime();
   }
 
-  async deploy(adminSecret?: Uint8Array): Promise<string> {
-    const session = this.requireSession();
+  async deploy(
+    adminSecret?: Uint8Array,
+    onProgress?: DeployProgressCallback,
+  ): Promise<string> {
+    const tracker = onProgress
+      ? createDeployProgressTracker(onProgress)
+      : null;
+
+    const session = tracker
+      ? await tracker.run(
+          "session",
+          () => {
+            const s = this.requireSession();
+            this.requireSecret();
+            return s;
+          },
+          "Checking wallet session…",
+          "Session ready",
+        )
+      : this.requireSession();
     const secret = adminSecret ?? this.requireSecret();
-    const address = await deployPolarisHealth(session, secret);
-    setMidnightContractAddress(address);
-    // The deployer's DApp secret is the one sealed into adminPk.
-    rememberAdminContract(address);
+
+    const address = await deployPolarisHealth(session, secret, onProgress);
+
+    if (tracker) {
+      await tracker.run(
+        "saveAddress",
+        async () => {
+          setMidnightContractAddress(address);
+          rememberAdminContract(address);
+        },
+        "Saving contract address…",
+        `Address saved: ${address}`,
+      );
+    } else {
+      setMidnightContractAddress(address);
+      rememberAdminContract(address);
+    }
+
     return address;
   }
 

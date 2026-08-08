@@ -15,6 +15,12 @@ import { usePathname } from "next/navigation";
 import { createMidnightProtocol, sanitizeError } from "@/lib/midnight";
 import type { MidnightHealthProtocol } from "@/lib/midnight";
 import {
+  createInitialDeployProgress,
+  reduceDeployProgress,
+  type DeployProgressEvent,
+  type DeployProgressState,
+} from "@/lib/midnight/deploy-progress";
+import {
   createWalletAdapter,
   detectInjectedWallets,
   getMidnightNetworkId,
@@ -62,6 +68,7 @@ type WalletValue = {
 
   contractAddress: string | null;
   isDeploying: boolean;
+  deployProgress: DeployProgressState;
   deploy: () => Promise<void>;
   setContractAddress: (address: string) => void;
   forgetContractAddress: () => void;
@@ -133,6 +140,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     null,
   );
   const [isDeploying, setIsDeploying] = useState(false);
+  const [deployProgress, setDeployProgress] = useState<DeployProgressState>(() =>
+    createInitialDeployProgress(),
+  );
   const [error, setError] = useState<AppError | null>(null);
   const [unshieldedBalanceNight, setUnshieldedBalanceNight] = useState<
     number | null
@@ -363,15 +373,46 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const deploy = useCallback(async () => {
     setIsDeploying(true);
+    setDeployProgress(createInitialDeployProgress("running"));
+
+    const handleProgress = (event: DeployProgressEvent) => {
+      setDeployProgress((prev) => reduceDeployProgress(prev, event));
+    };
+
     try {
       // Keep Compact/session WASM out of the eager WalletProvider graph.
       const { deployPolarisContract } = await import("@/lib/midnight/factory");
-      const address = await deployPolarisContract();
+      const address = await deployPolarisContract(undefined, handleProgress);
+      setDeployProgress((prev) => ({
+        ...prev,
+        status: "success",
+        lines: [
+          ...prev.lines,
+          {
+            timestamp: Date.now(),
+            level: "success",
+            message: `Deploy complete: ${address}`,
+          },
+        ],
+      }));
       setContractAddressState(address);
       setRequestVaultFund(true);
       setError(null);
       await refreshWalletBalance();
     } catch (raw) {
+      const sanitized = sanitizeError(raw);
+      setDeployProgress((prev) => ({
+        ...prev,
+        status: "failed",
+        lines: [
+          ...prev.lines,
+          {
+            timestamp: Date.now(),
+            level: "error",
+            message: `${sanitized.code}: ${sanitized.message}`,
+          },
+        ],
+      }));
       reportError(raw);
     } finally {
       setIsDeploying(false);
@@ -401,6 +442,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       recheckWallets,
       contractAddress,
       isDeploying,
+      deployProgress,
       deploy,
       setContractAddress,
       forgetContractAddress,
@@ -421,6 +463,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect,
       contractAddress,
       deploy,
+      deployProgress,
       disconnect,
       error,
       forgetContractAddress,
