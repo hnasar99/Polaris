@@ -329,6 +329,8 @@ export const en: Messages = {
       "The platform vault is out of liquidity right now, so this payout cannot settle. Your consent stays valid — try again later.",
     notifications: "Notifications",
     notificationsEmpty: "Nothing new.",
+    notificationsHint:
+      "Local hints from your private vault — nothing is sent to the lab.",
     notificationBody: "{amount} NIGHT (~{usd})",
     markAllRead: "Mark all as read",
     badgeEligible: "You qualify",

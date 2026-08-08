@@ -16,6 +16,7 @@ import {
 } from "@/domain/consent/types";
 import { nightToUsd } from "@/domain/pricing";
 import { useChain } from "@/features/chain/ChainProvider";
+import { studyAnchorId } from "@/features/matching/inbox";
 import type { CriterionKey } from "@/features/matching/matcher";
 import type { StudyMatch } from "@/features/matching/useMatches";
 import { usePatient } from "@/features/patient/PatientProvider";
@@ -60,7 +61,11 @@ export function OpportunityCard({ match }: { match: StudyMatch }) {
   const busy = (key: string) => busyKey === `${key}:${view.externalStudyId}`;
 
   return (
-    <Card tone={rank === "eligible" && !closed ? "highlight" : "default"}>
+    <Card
+      id={studyAnchorId(view.externalStudyId)}
+      tone={rank === "eligible" && !closed ? "highlight" : "default"}
+      className="scroll-mt-24 transition"
+    >
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">

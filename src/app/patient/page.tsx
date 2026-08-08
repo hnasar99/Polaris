@@ -6,6 +6,7 @@ import { WalletRequired } from "@/components/WalletPanel";
 import { useChain } from "@/features/chain/ChainProvider";
 import { useMatches } from "@/features/matching/useMatches";
 import { MedicalDataSection } from "@/features/patient/MedicalDataSection";
+import { MatchInbox } from "@/features/patient/MatchInbox";
 import { OpportunityCard } from "@/features/patient/OpportunityCard";
 import { usePatient } from "@/features/patient/PatientProvider";
 import { RoleGate } from "@/features/role/RoleGate";
@@ -64,6 +65,8 @@ function PatientDashboard() {
       </Card>
 
       <MedicalDataSection defaultOpen={!hasData} />
+
+      {!loading && hasData ? <MatchInbox matches={matches} /> : null}
 
       <section className="space-y-4">
         {loading ? (

@@ -332,6 +332,8 @@ export const es = {
       "El vault de la plataforma se quedó sin liquidez, así que este cobro no puede liquidarse. Tu consentimiento sigue válido: probá más tarde.",
     notifications: "Notificaciones",
     notificationsEmpty: "Nada nuevo.",
+    notificationsHint:
+      "Avisos locales según tu vault privado — no se envía nada al laboratorio.",
     notificationBody: "{amount} NIGHT (~{usd})",
     markAllRead: "Marcar todo como leído",
     badgeEligible: "Sos elegible",

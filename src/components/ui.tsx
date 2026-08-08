@@ -10,10 +10,12 @@ export function Card({
   children,
   className,
   tone = "default",
+  id,
 }: {
   children: ReactNode;
   className?: string;
   tone?: "default" | "highlight" | "muted";
+  id?: string;
 }) {
   const tones = {
     default: "border-white/10 bg-[#0b1628]/80",
@@ -23,6 +25,7 @@ export function Card({
 
   return (
     <section
+      id={id}
       className={cx(
         "rounded-2xl border p-4 sm:p-5 backdrop-blur",
         tones[tone],
