@@ -531,6 +531,8 @@ export const es = {
     MIDNIGHT_BINDINGS_MISSING:
       "El contrato Compact todavía no está compilado, así que las llamadas on-chain están deshabilitadas.",
     MIDNIGHT_NOT_CONNECTED: "El adaptador de Midnight no está conectado.",
+    MIDNIGHT_CIRCUIT_RESULT_MISSING:
+      "La transacción se envió pero no pudimos leer el resultado del circuito. Probá de nuevo.",
     STUDY_NOT_FOUND: "Esa investigación no existe en este contrato.",
     STUDY_INACTIVE: "La inscripción de esta investigación está cerrada.",
     STUDY_ALREADY_CLOSED: "Esta investigación ya está cerrada.",

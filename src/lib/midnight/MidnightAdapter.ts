@@ -43,7 +43,11 @@ import {
   rememberLabStudy,
   rememberResearcherPk,
 } from "@/lib/midnight/lab-identity";
-import { callPolarisCircuit, deployPolarisHealth } from "@/lib/midnight/polaris-tx";
+import {
+  callPolarisCircuit,
+  coerceCircuitBoolean,
+  deployPolarisHealth,
+} from "@/lib/midnight/polaris-tx";
 import {
   createDeployProgressTracker,
   type DeployProgressCallback,
@@ -335,20 +339,40 @@ export class MidnightAdapter implements MidnightHealthProtocol {
       treatmentMonths: input.privateWitness.treatmentMonths,
     });
 
-    const { transactionId, result } = await callPolarisCircuit(
-      session,
-      contractAddress,
-      "proveEligibility",
-      [studyId],
-      privateState,
-    );
+    try {
+      const { transactionId, result } = await callPolarisCircuit(
+        session,
+        contractAddress,
+        "proveEligibility",
+        [studyId],
+        privateState,
+      );
 
-    const eligible = Boolean(result);
-    return {
-      eligible,
-      proofReference: `midnight:proveEligibility:${transactionId}`,
-      transactionId,
-    };
+      const eligible = coerceCircuitBoolean(result);
+      if (eligible === undefined) {
+        throw new MidnightAdapterError(
+          "MIDNIGHT_CIRCUIT_RESULT_MISSING",
+          "proveEligibility returned no circuit result — cannot decide eligibility",
+        );
+      }
+      return {
+        eligible,
+        proofReference: `midnight:proveEligibility:${transactionId}`,
+        transactionId,
+      };
+    } catch (raw) {
+      // A prior successful prove that the UI mis-read as not_eligible leaves the
+      // nullifier on-chain. Surface that as eligible so consent can proceed.
+      const msg = raw instanceof Error ? raw.message : String(raw);
+      if (/eligibility already proved/i.test(msg)) {
+        return {
+          eligible: true,
+          proofReference: `midnight:proveEligibility:already-proved:${input.externalStudyId}`,
+          transactionId: `already_proved_${input.externalStudyId}`,
+        };
+      }
+      throw raw;
+    }
   }
 
   async grantConsent(input: GrantConsentInput): Promise<TransactionResult> {

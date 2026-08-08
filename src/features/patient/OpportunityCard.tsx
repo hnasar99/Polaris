@@ -116,7 +116,14 @@ export function OpportunityCard({ match }: { match: StudyMatch }) {
           {!proved ? (
             <Button
               disabled={rank !== "eligible" || busy("prove")}
-              onClick={() => void proveEligibility(view, derived.witness)}
+              onClick={() => {
+                void (async () => {
+                  const ok = await proveEligibility(view, derived.witness);
+                  // Positive proof unlocks consent — open the review immediately
+                  // so the next wallet prompt is obvious.
+                  if (ok) setReviewing(true);
+                })();
+              }}
             >
               {busy("prove") ? (
                 <>
@@ -132,6 +139,12 @@ export function OpportunityCard({ match }: { match: StudyMatch }) {
             <Button onClick={() => setReviewing(!reviewing)}>
               {t("matches.consentCta")}
             </Button>
+          ) : null}
+
+          {proved && !consented && !reviewing ? (
+            <span className="text-sm text-emerald-200/90">
+              {t("matches.proved")}
+            </span>
           ) : null}
 
           {consented && !claimed ? (

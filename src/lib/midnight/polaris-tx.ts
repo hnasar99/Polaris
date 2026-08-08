@@ -26,6 +26,12 @@ function extractTxId(value: unknown): string {
     if (typeof obj.transactionId === "string") return obj.transactionId;
     if (typeof obj.txId === "string") return obj.txId;
     if (typeof obj.txHash === "string") return obj.txHash;
+    // submitCallTxAsync → { txId, callTxData }
+    const nested = obj.callTxData;
+    if (nested && typeof nested === "object") {
+      const fromNested = extractTxId(nested);
+      if (!fromNested.startsWith("midnight_tx_")) return fromNested;
+    }
     const pub = obj.public as Record<string, unknown> | undefined;
     if (pub) {
       if (typeof pub.txHash === "string") return pub.txHash;
@@ -36,14 +42,44 @@ function extractTxId(value: unknown): string {
   return `midnight_tx_${Date.now().toString(36)}`;
 }
 
-function extractCircuitResult(value: unknown): unknown {
-  if (!value || typeof value !== "object") return undefined;
+/**
+ * Circuit return value from midnight-js call helpers.
+ *
+ * Shapes seen in the wild:
+ * - createUnprovenCallTx → CallResult: `{ private: { result } }`
+ * - submitCallTxAsync → `{ txId, callTxData: CallResult }`
+ * - FinalizedCallTxData → CallResult + `{ public: FinalizedTxData }`
+ */
+export function extractCircuitResult(value: unknown): unknown {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== "object") return value;
+
   const obj = value as Record<string, unknown>;
+
+  // submitCallTxAsync wraps the CallResult
+  if (obj.callTxData !== undefined) {
+    const nested = extractCircuitResult(obj.callTxData);
+    if (nested !== undefined) return nested;
+  }
+
   if ("result" in obj) return obj.result;
-  const pub = obj.public as Record<string, unknown> | undefined;
-  if (pub && "result" in pub) return pub.result;
+
   const priv = obj.private as Record<string, unknown> | undefined;
   if (priv && "result" in priv) return priv.result;
+
+  const pub = obj.public as Record<string, unknown> | undefined;
+  if (pub && "result" in pub) return pub.result;
+
+  return undefined;
+}
+
+/** Coerce a Compact/JS circuit Boolean into a real boolean. */
+export function coerceCircuitBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "bigint") return value !== 0n;
+  if (value === "true") return true;
+  if (value === "false") return false;
   return undefined;
 }
 

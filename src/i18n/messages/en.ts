@@ -527,6 +527,8 @@ export const en: Messages = {
     MIDNIGHT_BINDINGS_MISSING:
       "The Compact contract is not compiled yet, so on-chain calls are disabled.",
     MIDNIGHT_NOT_CONNECTED: "Midnight adapter not connected.",
+    MIDNIGHT_CIRCUIT_RESULT_MISSING:
+      "The transaction was submitted but the circuit result could not be read. Try again.",
     STUDY_NOT_FOUND: "That research does not exist on this contract.",
     STUDY_INACTIVE: "Enrollment for this research is closed.",
     STUDY_ALREADY_CLOSED: "This research is already closed.",
