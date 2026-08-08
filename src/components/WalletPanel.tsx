@@ -92,13 +92,18 @@ export function WalletPanel() {
 
       {walletConnected && walletAddress ? (
         <div className="space-y-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">
-              {t("wallet.unshieldedAddress")}
-            </p>
-            <p className="break-all font-mono text-sm text-white">
-              {walletAddress}
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                {t("wallet.unshieldedAddress")}
+              </p>
+              <p className="break-all font-mono text-sm text-white">
+                {walletAddress}
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => void disconnect()}>
+              {t("wallet.disconnect")}
+            </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
             <span>
@@ -117,9 +122,6 @@ export function WalletPanel() {
               })}
             </p>
           ) : null}
-          <Button variant="secondary" onClick={() => void disconnect()}>
-            {t("wallet.disconnect")}
-          </Button>
         </div>
       ) : walletStatus === "checking" ? (
         <p className="flex items-center gap-2 text-sm text-slate-400">

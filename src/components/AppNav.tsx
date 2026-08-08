@@ -28,9 +28,13 @@ export function AppNav() {
 
   const definition = role ? ROLE_DEFINITIONS[role] : null;
   const onLanding = pathname === "/";
-  // Wallet is patient-only and never on the role picker.
+  // Wallet connect/disconnect for roles that use the extension — never on the role picker.
   const showWallet =
-    !onLanding && (role === "patient" || pathname === "/patient");
+    !onLanding &&
+    (role === "patient" ||
+      role === "admin" ||
+      pathname === "/patient" ||
+      pathname === "/admin");
 
   const handleSignOut = async () => {
     signOut();
@@ -87,14 +91,21 @@ export function AppNav() {
 
         {showWallet ? (
           walletConnected && walletAddress ? (
-            <button
-              type="button"
-              onClick={() => void disconnect()}
-              title={`${walletAddress} — ${t("wallet.disconnect")}`}
-              className="rounded-lg bg-emerald-400/10 px-2.5 py-1 font-mono text-xs text-emerald-200 ring-1 ring-inset ring-emerald-400/20 transition hover:bg-emerald-400/15"
-            >
-              {truncateAddress(walletAddress)}
-            </button>
+            <div className="flex items-center gap-2">
+              <span
+                title={walletAddress}
+                className="rounded-lg bg-emerald-400/10 px-2.5 py-1 font-mono text-xs text-emerald-200 ring-1 ring-inset ring-emerald-400/20"
+              >
+                {truncateAddress(walletAddress)}
+              </span>
+              <button
+                type="button"
+                onClick={() => void disconnect()}
+                className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-300 ring-1 ring-inset ring-white/10 transition hover:bg-white/5 hover:text-white"
+              >
+                {t("wallet.disconnect")}
+              </button>
+            </div>
           ) : walletStatus === "not-found" ? (
             <span
               title={t("wallet.install")}
