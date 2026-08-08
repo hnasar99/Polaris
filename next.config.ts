@@ -1,14 +1,26 @@
 import type { NextConfig } from "next";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
+/** Real Compact output when present; stub otherwise so builds work pre-compile. */
+const healthContractEntry = (() => {
+  const generated = path.join(
+    rootDir,
+    "midnight/generated/polaris-health/contract/index.js",
+  );
+  if (existsSync(generated)) return generated;
+  return path.join(rootDir, "src/lib/midnight/contract-stub.js");
+})();
 
 const nextConfig: NextConfig = {
   webpack(config) {
     config.resolve.alias = {
       ...config.resolve.alias,
       "isomorphic-ws": path.join(rootDir, "src/lib/isomorphic-ws-fix.mjs"),
+      "@polaris/health-contract": healthContractEntry,
     };
     config.resolve.fallback = {
       ...config.resolve.fallback,

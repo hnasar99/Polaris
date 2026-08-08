@@ -44,15 +44,20 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Midnight Compact compiler output (keys / zkir / generated bindings)
+# Midnight Compact compiler output.
+# Track polaris-health/contract (and public/zk assets) so Vercel/git deploys
+# can load real bindings. Keep bulky intermediate dirs local-only.
 /midnight/generated/*/
 !/midnight/generated/README.md
+!/midnight/generated/polaris-health/
+!/midnight/generated/polaris-health/**
+/midnight/generated/polaris-health/keys/
+/midnight/generated/polaris-health/zkir/
+/midnight/generated/polaris-health/compiler/
 /midnight/contracts/node_modules/
 /midnight/contracts/src/managed/
 
-# ZK assets copied into the public dir by scripts/sync-zk-assets.mjs
-/public/zk/*/keys/
-/public/zk/*/zkir/
+# public/zk/*/keys and zkir are intentionally tracked (synced by npm run sync:zk)
 
 # Supabase CLI scratch state
 /supabase/.temp/

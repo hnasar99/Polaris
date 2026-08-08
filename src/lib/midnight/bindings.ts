@@ -10,6 +10,10 @@
  * public/zk/polaris-health/.
  *
  * Never invent Contract shapes — only load compiler output.
+ *
+ * The Contract module is resolved via the `@polaris/health-contract` webpack
+ * alias (real generated file, or `contract-stub.js` before compile). Do not use
+ * `webpackIgnore` — that becomes a browser network fetch and 404s.
  */
 
 import {
@@ -38,7 +42,7 @@ let cached: LoadedPolarisBindings | null | undefined;
 
 /**
  * Returns null when bindings are not compiled / not flagged ready.
- * Uses webpackIgnore so Next can build before `compact compile`.
+ * Dynamic import keeps Compact/WASM out of the eager client graph.
  */
 export async function loadPolarisBindings(): Promise<LoadedPolarisBindings | null> {
   if (cached !== undefined) return cached;
@@ -48,18 +52,17 @@ export async function loadPolarisBindings(): Promise<LoadedPolarisBindings | nul
   }
 
   try {
-    const compactJs = await import("@midnight-ntwrk/compact-js");
-    // Variable path so TypeScript does not require compiler output at build time.
-    // File exists only after `npm run compact`.
-    const generatedPath =
-      "../../../midnight/generated/polaris-health/contract/index.js";
-    const generated: { Contract?: unknown; ledger?: unknown } = await import(
-      /* webpackIgnore: true */
-      generatedPath
-    );
+    const [compactJs, generated] = await Promise.all([
+      import("@midnight-ntwrk/compact-js"),
+      import("@polaris/health-contract"),
+    ]);
 
-    const Contract = generated.Contract;
+    const Contract = (generated as { Contract?: unknown }).Contract;
     if (!Contract) {
+      // Stub is aliased when midnight/generated/.../contract is missing from the build.
+      console.error(
+        "[polaris] Compact Contract export missing — generated bindings were not included in this build (run npm run compact && npm run sync:zk locally; ensure contract + public/zk are present for deploys).",
+      );
       cached = null;
       return null;
     }
@@ -76,17 +79,19 @@ export async function loadPolarisBindings(): Promise<LoadedPolarisBindings | nul
       CC.withCompiledFileAssets(zkPath),
     );
 
+    const ledgerFn = (generated as { ledger?: unknown }).ledger;
     cached = {
       Contract,
       compiledContract,
       ledger:
-        typeof generated.ledger === "function"
+        typeof ledgerFn === "function"
           ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (generated.ledger as (data: any) => any)
+            (ledgerFn as (data: any) => any)
           : null,
     };
     return cached;
-  } catch {
+  } catch (err) {
+    console.error("[polaris] Failed to load Compact bindings", err);
     cached = null;
     return null;
   }

@@ -1,34 +1,32 @@
-# Generated bindings (placeholder)
+# Generated bindings
 
-This folder is reserved for **compiler-generated** artifacts from Compact contracts — for example TypeScript client bindings, circuit keys, and related managed output produced by the official Midnight Compact compiler.
+Compiler output from Compact contracts lives here after:
+
+```bash
+npm run compact
+npm run sync:zk
+```
+
+## polaris-health
+
+| Path | Purpose | Git |
+|------|---------|-----|
+| `polaris-health/contract/` | TypeScript/JS `Contract` + `ledger` bindings | Tracked (needed for Vercel/webpack) |
+| `polaris-health/keys/`, `zkir/`, `compiler/` | Intermediate compiler artifacts | Local-only (gitignored) |
+| `public/zk/polaris-health/` | Keys + zkir served to the browser | Tracked (copied by `sync:zk`) |
 
 ## Rules
 
-1. **Do not invent** fake generated files, stub `Contract` classes, or hand-written prover/verifier keys that pretend to be compiler output.
-2. **Do not commit** placeholder TypeScript that mimics midnight-js binding shapes unless produced by the toolchain (or an approved official template copied from Midnight examples **after** a real compile step for this project).
-3. After a successful `compact compile`, place or link outputs here and import them only from `src/lib/midnight/MidnightAdapter.ts` (or a thin wrapper under `midnight/integration/`).
+1. **Do not invent** fake generated files, stub `Contract` classes, or hand-written prover/verifier keys.
+2. Import bindings only via `src/lib/midnight/bindings.ts` (`@polaris/health-contract` alias).
+3. Set `NEXT_PUBLIC_POLARIS_BINDINGS_READY=true` only after `contract/` exists and `public/zk/polaris-health` is synced.
 
-## Expected contents (later)
-
-Exact layout depends on Compact compiler version. Conceptually you may see:
-
-- TypeScript / JS contract bindings (importable `Contract` or equivalent)
-- Prover / verifier key material for circuits
-- Intermediate IR / managed artifacts
-
-Until those exist, this directory should contain **documentation only** (this README).
-
-## App import policy
+## Pipeline
 
 ```
 midnight/contracts/polaris-health.compact
-        → compact compile
-        → midnight/generated/polaris-health/*
-        → MidnightAdapter (src/lib/midnight)
-                                                              ↓
-                                              createMidnightProtocol() factory
+        → npm run compact
+        → midnight/generated/polaris-health/contract
+        → npm run sync:zk → public/zk/polaris-health
+        → MidnightAdapter / polaris-tx
 ```
-
-The factory must keep returning `MidnightAdapter` (throwing `Midnight adapter not connected`) until imports from this folder are real and methods are implemented.
-
-There is no demo adapter and no local evaluation fallback: never add a hand-written “proof” module here to make a flow appear to work.
