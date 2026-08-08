@@ -59,6 +59,17 @@ export interface WithdrawVaultInput {
   recipientAddress?: string;
 }
 
+/** Result of moving liquidity from one contract vault to another. */
+export interface VaultRolloverResult {
+  sourceAddress: string;
+  targetAddress: string;
+  /** False when the source vault had nothing to move. */
+  moved: boolean;
+  amountNight: number;
+  withdrawTransactionId?: string;
+  fundTransactionId?: string;
+}
+
 /** Public vault projection for the admin console. */
 export interface VaultStatus {
   /**

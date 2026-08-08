@@ -11,6 +11,7 @@ import type {
   GrantConsentInput,
   RevokeConsentInput,
   TransactionResult,
+  VaultRolloverResult,
   VaultStatus,
   WithdrawVaultInput,
 } from "@/types/midnight";
@@ -25,7 +26,20 @@ export interface MidnightHealthProtocol {
   // Platform admin — liquidity vault that pays every participant
   fundVault(input: FundVaultInput): Promise<TransactionResult>;
   withdrawVault(input: WithdrawVaultInput): Promise<TransactionResult>;
+  fundVaultAt(
+    contractAddress: string,
+    input: FundVaultInput,
+  ): Promise<TransactionResult>;
+  withdrawVaultAt(
+    contractAddress: string,
+    input: WithdrawVaultInput,
+  ): Promise<TransactionResult>;
   readVault(): Promise<VaultStatus>;
+  readVaultForAddress(contractAddress: string): Promise<VaultStatus>;
+  rolloverVault(input: {
+    sourceAddress: string;
+    targetAddress: string;
+  }): Promise<VaultRolloverResult>;
 
   // Laboratory / researcher (no on-chain funding: studies are paid off-chain)
   createStudy(input: CreateStudyInput): Promise<TransactionResult>;

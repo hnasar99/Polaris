@@ -76,7 +76,11 @@ describe("createMidnightProtocol factory", () => {
     for (const method of [
       "fundVault",
       "withdrawVault",
+      "fundVaultAt",
+      "withdrawVaultAt",
       "readVault",
+      "readVaultForAddress",
+      "rolloverVault",
       "createStudy",
       "closeStudy",
       "proveEligibility",

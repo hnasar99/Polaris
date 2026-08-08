@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge, Button, Card, Field, SectionHeader, inputClass } from "@/components/ui";
 import { DeployProgressPanel } from "@/features/admin/DeployProgressPanel";
+import { DeploymentHistory } from "@/features/admin/DeploymentHistory";
 import { useWallet } from "@/features/wallet/WalletProvider";
 import { useI18n } from "@/i18n";
 
@@ -22,6 +23,11 @@ export function ContractPanel() {
     networkId,
   } = useWallet();
   const [draft, setDraft] = useState("");
+
+  const handleForget = () => {
+    if (!window.confirm(t("admin.forgetConfirm"))) return;
+    forgetContractAddress();
+  };
 
   return (
     <Card>
@@ -47,7 +53,7 @@ export function ContractPanel() {
           </div>
           <p className="text-xs text-slate-500">{t("admin.deploySavedHint")}</p>
           <DeployProgressPanel />
-          <Button variant="ghost" onClick={forgetContractAddress}>
+          <Button variant="ghost" onClick={handleForget}>
             {t("contract.clear")}
           </Button>
         </div>
@@ -95,6 +101,8 @@ export function ContractPanel() {
           <p className="text-xs text-slate-500">{t("admin.pasteNotAdmin")}</p>
         </div>
       )}
+
+      <DeploymentHistory />
     </Card>
   );
 }

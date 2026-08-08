@@ -26,7 +26,7 @@ import { getLabStudyIdsHex, rememberLabStudy } from "@/lib/midnight/lab-identity
 import { encodeStudyId, starsToNight, toHex } from "@/lib/midnight/encoding";
 import type { OnChainStudy } from "@/lib/midnight/polaris-read";
 import { loadStudyMetadata, saveStudyMetadata } from "@/lib/vault/studyMetadata";
-import type { VaultStatus } from "@/types/midnight";
+import type { VaultRolloverResult, VaultStatus } from "@/types/midnight";
 
 export type NewStudyInput = {
   externalStudyId: string;
@@ -80,6 +80,9 @@ type ChainValue = {
 
   fundVault: (amountNight: number) => Promise<boolean>;
   withdrawVault: (amountNight: number, recipient?: string) => Promise<boolean>;
+  readVaultForAddress: (contractAddress: string) => Promise<VaultStatus>;
+  rolloverVault: (sourceAddress: string) => Promise<VaultRolloverResult | null>;
+  rolloverAllVaults: () => Promise<VaultRolloverResult[]>;
 };
 
 const ChainContext = createContext<ChainValue | null>(null);
@@ -530,6 +533,72 @@ export function ChainProvider({ children }: { children: ReactNode }) {
     [protocol, refresh, reportError],
   );
 
+  const readVaultForAddress = useCallback(
+    (address: string) => protocol.readVaultForAddress(address),
+    [protocol],
+  );
+
+  const rolloverVault = useCallback(
+    async (sourceAddress: string): Promise<VaultRolloverResult | null> => {
+      if (!contractAddress) return null;
+      setBusyKey(`rollover:${sourceAddress}`);
+      try {
+        const result = await protocol.rolloverVault({
+          sourceAddress,
+          targetAddress: contractAddress,
+        });
+        await refresh();
+        return result;
+      } catch (raw) {
+        reportError(raw);
+        return null;
+      } finally {
+        setBusyKey(null);
+      }
+    },
+    [contractAddress, protocol, refresh, reportError],
+  );
+
+  const rolloverAllVaults = useCallback(async (): Promise<VaultRolloverResult[]> => {
+    if (!contractAddress) return [];
+    setBusyKey("rollover:all");
+    const results: VaultRolloverResult[] = [];
+    try {
+      const { listAdminContracts } = await import("@/lib/midnight/admin-identity");
+      const { getMidnightNetworkId } = await import("@/lib/wallet/network");
+      const networkId = getMidnightNetworkId();
+      const contracts = listAdminContracts().filter(
+        (row) => row.networkId === networkId,
+      );
+      const statuses = await Promise.all(
+        contracts.map(async (row) => ({
+          address: row.address,
+          vault: await protocol.readVaultForAddress(row.address),
+        })),
+      );
+
+      for (const { address, vault: sourceVault } of statuses) {
+        if (address === contractAddress) continue;
+        if (!sourceVault.known || !sourceVault.isAdmin || sourceVault.balanceNight <= 0) {
+          continue;
+        }
+        const result = await protocol.rolloverVault({
+          sourceAddress: address,
+          targetAddress: contractAddress,
+        });
+        results.push(result);
+      }
+
+      await refresh();
+      return results;
+    } catch (raw) {
+      reportError(raw);
+      return results;
+    } finally {
+      setBusyKey(null);
+    }
+  }, [contractAddress, protocol, refresh, reportError]);
+
   const value = useMemo<ChainValue>(
     () => ({
       loading,
@@ -549,6 +618,9 @@ export function ChainProvider({ children }: { children: ReactNode }) {
       closeStudy,
       fundVault,
       withdrawVault,
+      readVaultForAddress,
+      rolloverVault,
+      rolloverAllVaults,
     }),
     [
       busyKey,
@@ -561,9 +633,12 @@ export function ChainProvider({ children }: { children: ReactNode }) {
       myStudies,
       progressFor,
       proveEligibility,
+      readVaultForAddress,
       refresh,
       refreshing,
       revokeConsent,
+      rolloverAllVaults,
+      rolloverVault,
       studies,
       vault,
       vaultCovers,

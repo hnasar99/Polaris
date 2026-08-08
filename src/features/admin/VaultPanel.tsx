@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { RefreshIconButton } from "@/components/RefreshIconButton";
 import {
   Badge,
   Button,
@@ -22,7 +23,8 @@ import { useI18n } from "@/i18n";
  */
 export function VaultPanel() {
   const { t, formatNumber } = useI18n();
-  const { vault, studies, busyKey, fundVault, withdrawVault } = useChain();
+  const { vault, studies, busyKey, fundVault, withdrawVault, refresh, refreshing } =
+    useChain();
   const {
     unshieldedBalanceNight,
     refreshWalletBalance,
@@ -34,10 +36,32 @@ export function VaultPanel() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [recipient, setRecipient] = useState("");
   const [fundDraftTouched, setFundDraftTouched] = useState(false);
+  const [balancesRefreshing, setBalancesRefreshing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const funding = busyKey === "vault:fund";
   const withdrawing = busyKey === "vault:withdraw";
+  const updatingBalances = balancesRefreshing || refreshing;
+
+  /** Vault ledger + wallet unshielded — on-demand from the update control. */
+  const refreshBalances = useCallback(async () => {
+    setBalancesRefreshing(true);
+    try {
+      await Promise.all([refresh(), refreshWalletBalance()]);
+      // Wallet extension balance can lag the confirmed unshielded spend briefly.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await refreshWalletBalance();
+    } finally {
+      setBalancesRefreshing(false);
+    }
+  }, [refresh, refreshWalletBalance]);
+
+  /** Ledger is already refreshed inside fund/withdraw; re-read wallet with lag. */
+  const refreshWalletAfterTx = useCallback(async () => {
+    await refreshWalletBalance();
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await refreshWalletBalance();
+  }, [refreshWalletBalance]);
 
   const typicalReward =
     studies.length > 0
@@ -85,9 +109,15 @@ export function VaultPanel() {
         title={t("admin.vaultTitle")}
         subtitle={t("admin.subtitle")}
         action={
-          <Badge tone={vault.isAdmin ? "success" : "danger"}>
-            {vault.isAdmin ? t("admin.isAdmin") : t("admin.notAdmin")}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <RefreshIconButton
+              refreshing={updatingBalances}
+              onClick={refreshBalances}
+            />
+            <Badge tone={vault.isAdmin ? "success" : "danger"}>
+              {vault.isAdmin ? t("admin.isAdmin") : t("admin.notAdmin")}
+            </Badge>
+          </div>
         }
       />
 
@@ -197,7 +227,7 @@ export function VaultPanel() {
                 setFundAmount("");
                 setFundDraftTouched(false);
                 clearFundPrompt();
-                void refreshWalletBalance();
+                void refreshWalletAfterTx();
               }
             }}
           >
@@ -246,6 +276,7 @@ export function VaultPanel() {
               if (ok) {
                 setWithdrawAmount("");
                 setRecipient("");
+                void refreshWalletAfterTx();
               }
             }}
           >

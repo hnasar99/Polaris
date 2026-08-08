@@ -8,6 +8,7 @@ import type {
   GrantConsentInput,
   RevokeConsentInput,
   TransactionResult,
+  VaultRolloverResult,
   VaultStatus,
   WithdrawVaultInput,
 } from "@/types/midnight";
@@ -37,7 +38,24 @@ function createLazyMidnightAdapter(): MidnightHealthProtocol {
       get().then((a) => a.fundVault(input)),
     withdrawVault: (input: WithdrawVaultInput): Promise<TransactionResult> =>
       get().then((a) => a.withdrawVault(input)),
+    fundVaultAt: (
+      contractAddress: string,
+      input: FundVaultInput,
+    ): Promise<TransactionResult> =>
+      get().then((a) => a.fundVaultAt(contractAddress, input)),
+    withdrawVaultAt: (
+      contractAddress: string,
+      input: WithdrawVaultInput,
+    ): Promise<TransactionResult> =>
+      get().then((a) => a.withdrawVaultAt(contractAddress, input)),
     readVault: (): Promise<VaultStatus> => get().then((a) => a.readVault()),
+    readVaultForAddress: (contractAddress: string): Promise<VaultStatus> =>
+      get().then((a) => a.readVaultForAddress(contractAddress)),
+    rolloverVault: (input: {
+      sourceAddress: string;
+      targetAddress: string;
+    }): Promise<VaultRolloverResult> =>
+      get().then((a) => a.rolloverVault(input)),
     createStudy: (input: CreateStudyInput): Promise<TransactionResult> =>
       get().then((a) => a.createStudy(input)),
     closeStudy: (input: CloseStudyInput): Promise<TransactionResult> =>

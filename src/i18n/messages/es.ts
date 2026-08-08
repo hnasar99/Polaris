@@ -132,7 +132,7 @@ export const es = {
     use: "Usar dirección",
     deployHint:
       "Al desplegar se guarda la dirección en este navegador para reusarla después de recargar.",
-    clear: "Olvidar dirección",
+    clear: "Quitar contrato activo",
     deployLog: "Log de despliegue",
     deployStatusRunning: "En curso",
     deployStatusSuccess: "Completado",
@@ -486,6 +486,30 @@ export const es = {
       "Demo con una sola 1AM: acá depositás liquidez como plataforma; en /patient la misma wallet cobra con claimReward. Retirar del vault es solo para la plataforma (withdrawVault), no es el claim del paciente.",
     withdrawExplain:
       "Retiro de liquidez de plataforma (withdrawVault). Los pacientes cobran solos con claimReward desde /patient.",
+    forgetConfirm:
+      "¿Quitar el contrato activo? Sigue on-chain con su vault y estudios. La lista de abajo no se borra: podés volver a usarlo o, tras un deploy nuevo, recoger su vault.",
+    historyTitle: "Contratos anteriores",
+    historyBody:
+      "Direcciones de esta red guardadas en el navegador. Siempre visibles. “Quitar contrato activo” solo libera el puntero para poder desplegar otro.",
+    historyEmpty: "Todavía no hay contratos registrados en este navegador para esta red.",
+    historyActive: "Activo",
+    historyUse: "Usar",
+    historyCopy: "Copiar",
+    historySourceDeploy: "Deploy",
+    historySourceJoin: "Pegado",
+    historyUnknownDate: "Fecha desconocida",
+    historyBalanceLoading: "Leyendo saldo del vault…",
+    historyVaultBalance: "Vault: {amount} NIGHT",
+    rolloverHint:
+      "Con un contrato activo, podés recoger la liquidez de los vaults anteriores hacia ese activo. Las direcciones quedan en esta lista.",
+    rolloverOne: "Recoger vault",
+    rolloverAll: "Recoger todos ({count})",
+    rolloverRunning: "Recogiendo…",
+    rolloverAllRunning: "Recogiendo todos…",
+    rolloverConfirmOne:
+      "¿Mover {amount} NIGHT del vault {source} al contrato activo {target}? El contrato origen sigue on-chain.",
+    rolloverConfirmAll:
+      "¿Mover la liquidez de {count} vault(s) anteriores (~{amount} NIGHT) al contrato activo {target}?",
   },
   privacy: {
     provedTitle: "Probado con conocimiento cero",

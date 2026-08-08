@@ -20,6 +20,7 @@ import {
   type DeployProgressEvent,
   type DeployProgressState,
 } from "@/lib/midnight/deploy-progress";
+import { rememberAdminContract } from "@/lib/midnight/admin-identity";
 import {
   createWalletAdapter,
   detectInjectedWallets,
@@ -351,16 +352,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [connect, disconnect, selectedNetwork, walletAddress, walletName],
   );
 
-  const setContractAddress = useCallback((address: string) => {
-    const trimmed = address.trim();
-    if (!trimmed) return;
-    setContractAddressState(trimmed);
-    void import("@/lib/midnight/runtime").then(
-      ({ setMidnightContractAddress }) => {
-        setMidnightContractAddress(trimmed);
-      },
-    );
-  }, []);
+  const setContractAddress = useCallback(
+    (address: string, source: "deploy" | "join" = "join") => {
+      const trimmed = address.trim();
+      if (!trimmed) return;
+      setContractAddressState(trimmed);
+      rememberAdminContract(trimmed, {
+        networkId: getMidnightNetworkId(),
+        source,
+      });
+      void import("@/lib/midnight/runtime").then(
+        ({ setMidnightContractAddress }) => {
+          setMidnightContractAddress(trimmed);
+        },
+      );
+    },
+    [],
+  );
 
   const forgetContractAddress = useCallback(() => {
     setContractAddressState(null);

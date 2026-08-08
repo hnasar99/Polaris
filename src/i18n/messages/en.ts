@@ -131,7 +131,7 @@ export const en: Messages = {
     use: "Use address",
     deployHint:
       "Deploying writes the address to this browser so the app reuses it after a reload.",
-    clear: "Forget address",
+    clear: "Clear active contract",
     deployLog: "Deployment log",
     deployStatusRunning: "In progress",
     deployStatusSuccess: "Complete",
@@ -482,6 +482,30 @@ export const en: Messages = {
       "Single-wallet demo: fund liquidity here as platform; on /patient the same wallet claims via claimReward. Vault withdraw is platform-only (withdrawVault), not the patient claim.",
     withdrawExplain:
       "Platform liquidity withdrawal (withdrawVault). Patients claim on their own via claimReward from /patient.",
+    forgetConfirm:
+      "Clear the active contract? It stays on-chain with its vault and studies. The list below is kept — you can switch back, or after a new deploy collect its vault.",
+    historyTitle: "Previous contracts",
+    historyBody:
+      "Addresses for this network saved in the browser. Always visible. “Clear active contract” only frees the pointer so you can deploy another.",
+    historyEmpty: "No contracts recorded in this browser for this network yet.",
+    historyActive: "Active",
+    historyUse: "Use",
+    historyCopy: "Copy",
+    historySourceDeploy: "Deploy",
+    historySourceJoin: "Pasted",
+    historyUnknownDate: "Unknown date",
+    historyBalanceLoading: "Reading vault balance…",
+    historyVaultBalance: "Vault: {amount} NIGHT",
+    rolloverHint:
+      "With an active contract, you can collect liquidity from previous vaults into that active one. Addresses stay in this list.",
+    rolloverOne: "Collect vault",
+    rolloverAll: "Collect all ({count})",
+    rolloverRunning: "Collecting…",
+    rolloverAllRunning: "Collecting all…",
+    rolloverConfirmOne:
+      "Move {amount} NIGHT from vault {source} to active contract {target}? The source contract remains on-chain.",
+    rolloverConfirmAll:
+      "Move liquidity from {count} previous vault(s) (~{amount} NIGHT) to active contract {target}?",
   },
   privacy: {
     provedTitle: "Proved with zero knowledge",

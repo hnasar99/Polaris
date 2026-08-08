@@ -10,6 +10,7 @@ import type {
   GrantConsentInput,
   RevokeConsentInput,
   TransactionResult,
+  VaultRolloverResult,
   VaultStatus,
   WithdrawVaultInput,
 } from "@/types/midnight";
@@ -53,6 +54,7 @@ import {
   type DeployProgressCallback,
 } from "@/lib/midnight/deploy-progress";
 import {
+  pollForLedger,
   readPolarisLedger,
   type OnChainStudy,
   type PolarisLedgerView,
@@ -122,19 +124,27 @@ export class MidnightAdapter implements MidnightHealthProtocol {
 
     const address = await deployPolarisHealth(session, secret, onProgress);
 
+    const networkId = session.config.networkId;
+
     if (tracker) {
       await tracker.run(
         "saveAddress",
         async () => {
           setMidnightContractAddress(address);
-          rememberAdminContract(address);
+          rememberAdminContract(address, {
+            networkId,
+            source: "deploy",
+          });
         },
         "Saving contract address…",
         `Address saved: ${address}`,
       );
     } else {
       setMidnightContractAddress(address);
-      rememberAdminContract(address);
+      rememberAdminContract(address, {
+        networkId,
+        source: "deploy",
+      });
     }
 
     return address;
@@ -225,7 +235,21 @@ export class MidnightAdapter implements MidnightHealthProtocol {
   // -------------------------------------------------------------------------
 
   async fundVault(input: FundVaultInput): Promise<TransactionResult> {
-    const { session, contractAddress, secret } = await this.requireReady();
+    const { contractAddress } = await this.requireReady();
+    return this.fundVaultAt(contractAddress, input);
+  }
+
+  async withdrawVault(input: WithdrawVaultInput): Promise<TransactionResult> {
+    const { contractAddress } = await this.requireReady();
+    return this.withdrawVaultAt(contractAddress, input);
+  }
+
+  async fundVaultAt(
+    contractAddress: string,
+    input: FundVaultInput,
+  ): Promise<TransactionResult> {
+    const { session, secret } = await this.requireReady();
+    const before = await readPolarisLedger(session, contractAddress);
     const { transactionId } = await callPolarisCircuit(
       session,
       contractAddress,
@@ -233,11 +257,21 @@ export class MidnightAdapter implements MidnightHealthProtocol {
       [nightToStars(input.amountNight)],
       this.medicalState(secret),
     );
+    await pollForLedger(session, contractAddress, (view) =>
+      before
+        ? view.totalFundedStars > before.totalFundedStars ||
+          view.vaultBalanceStars > before.vaultBalanceStars
+        : view.totalFundedStars > 0n || view.vaultBalanceStars > 0n,
+    );
     return { transactionId, status: "submitted" };
   }
 
-  async withdrawVault(input: WithdrawVaultInput): Promise<TransactionResult> {
-    const { session, contractAddress, secret } = await this.requireReady();
+  async withdrawVaultAt(
+    contractAddress: string,
+    input: WithdrawVaultInput,
+  ): Promise<TransactionResult> {
+    const { session, secret } = await this.requireReady();
+    const before = await readPolarisLedger(session, contractAddress);
     const recipient = input.recipientAddress
       ? bech32ToUserAddress(input.recipientAddress, session.config.networkId)
       : this.payoutAddress(session);
@@ -249,25 +283,98 @@ export class MidnightAdapter implements MidnightHealthProtocol {
       [recipient, nightToStars(input.amountNight)],
       this.medicalState(secret),
     );
+    await pollForLedger(session, contractAddress, (view) =>
+      before ? view.vaultBalanceStars < before.vaultBalanceStars : view != null,
+    );
     return { transactionId, status: "submitted" };
   }
 
-  async readVault(): Promise<VaultStatus> {
-    const view = await this.readLedger();
-    const contractAddress =
-      getMidnightRuntime().contractAddress ?? loadPersistedContractAddress();
-
-    if (!view) {
+  async rolloverVault(input: {
+    sourceAddress: string;
+    targetAddress: string;
+  }): Promise<VaultRolloverResult> {
+    const sourceAddress = input.sourceAddress.trim();
+    const targetAddress = input.targetAddress.trim();
+    if (!sourceAddress || !targetAddress) {
+      throw new MidnightAdapterError(
+        "MIDNIGHT_CONTRACT_ADDRESS_REQUIRED",
+        MIDNIGHT_CONTRACT_ADDRESS_REQUIRED,
+      );
+    }
+    if (sourceAddress === targetAddress) {
       return {
-        known: false,
-        balanceNight: 0,
-        totalFundedNight: 0,
-        totalPaidNight: 0,
-        adminPkHex: getAdminPkHex(),
-        isAdmin: deployedByThisBrowser(contractAddress),
+        sourceAddress,
+        targetAddress,
+        moved: false,
+        amountNight: 0,
       };
     }
 
+    const { session } = await this.requireReady();
+    const sourceView = await readPolarisLedger(session, sourceAddress);
+    if (!sourceView || sourceView.vaultBalanceStars <= 0n) {
+      return {
+        sourceAddress,
+        targetAddress,
+        moved: false,
+        amountNight: 0,
+      };
+    }
+
+    const sourceStatus = this.vaultStatusFromView(sourceView, sourceAddress);
+    if (!sourceStatus.isAdmin) {
+      throw new MidnightAdapterError(
+        "NOT_ADMIN",
+        "Only the platform admin can move vault liquidity.",
+      );
+    }
+
+    const amountNight = starsToNight(sourceView.vaultBalanceStars);
+    const withdraw = await this.withdrawVaultAt(sourceAddress, { amountNight });
+    const fund = await this.fundVaultAt(targetAddress, { amountNight });
+
+    return {
+      sourceAddress,
+      targetAddress,
+      moved: true,
+      amountNight,
+      withdrawTransactionId: withdraw.transactionId,
+      fundTransactionId: fund.transactionId,
+    };
+  }
+
+  async readVault(): Promise<VaultStatus> {
+    const contractAddress =
+      getMidnightRuntime().contractAddress ?? loadPersistedContractAddress();
+    if (!contractAddress) {
+      return this.emptyVaultStatus(null);
+    }
+    return this.readVaultForAddress(contractAddress);
+  }
+
+  async readVaultForAddress(contractAddress: string): Promise<VaultStatus> {
+    try {
+      const session = this.requireSession();
+      const bindings = await loadPolarisBindings();
+      if (!bindings) {
+        return this.emptyVaultStatus(contractAddress);
+      }
+
+      const view = await readPolarisLedger(session, contractAddress.trim());
+      if (!view) {
+        return this.emptyVaultStatus(contractAddress);
+      }
+
+      return this.vaultStatusFromView(view, contractAddress);
+    } catch {
+      return this.emptyVaultStatus(contractAddress);
+    }
+  }
+
+  private vaultStatusFromView(
+    view: PolarisLedgerView,
+    contractAddress: string,
+  ): VaultStatus {
     const isAdmin =
       deployedByThisBrowser(contractAddress) ||
       (getAdminPkHex() !== null && getAdminPkHex() === view.adminPkHex);
@@ -280,6 +387,17 @@ export class MidnightAdapter implements MidnightHealthProtocol {
       totalPaidNight: starsToNight(view.totalPaidStars),
       adminPkHex: view.adminPkHex,
       isAdmin,
+    };
+  }
+
+  private emptyVaultStatus(contractAddress: string | null): VaultStatus {
+    return {
+      known: false,
+      balanceNight: 0,
+      totalFundedNight: 0,
+      totalPaidNight: 0,
+      adminPkHex: getAdminPkHex(),
+      isAdmin: deployedByThisBrowser(contractAddress),
     };
   }
 
@@ -411,6 +529,7 @@ export class MidnightAdapter implements MidnightHealthProtocol {
    */
   async claimReward(input: ClaimRewardInput): Promise<TransactionResult> {
     const { session, contractAddress, secret } = await this.requireReady();
+    const before = await readPolarisLedger(session, contractAddress);
     const studyId = await encodeStudyId(input.externalStudyId);
     const { transactionId } = await callPolarisCircuit(
       session,
@@ -418,6 +537,13 @@ export class MidnightAdapter implements MidnightHealthProtocol {
       "claimReward",
       [studyId, this.payoutAddress(session)],
       this.medicalState(secret),
+    );
+    await pollForLedger(session, contractAddress, (view) =>
+      before
+        ? view.totalPaidStars > before.totalPaidStars ||
+          view.rewardClaimCount > before.rewardClaimCount ||
+          view.vaultBalanceStars < before.vaultBalanceStars
+        : view.rewardClaimCount > 0 || view.totalPaidStars > 0n,
     );
     return { transactionId, status: "submitted" };
   }
