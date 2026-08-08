@@ -1,12 +1,23 @@
 // Polaris Health — Compact contract for privacy-preserving research matching.
 //
-// Maps to MidnightHealthProtocol:
-//   createStudy | proveEligibility | grantConsent | revokeConsent | claimReward
+// Roles:
+//   Platform admin — fundVault | withdrawVault
+//   Laboratory     — createStudy | closeStudy
+//   Patient        — proveEligibility | grantConsent | revokeConsent | claimReward
+//
+// Funding model:
+//   Laboratories pay for a study OFF-CHAIN. They never deposit into this contract.
+//   The platform keeps a single liquidity vault here (`vaultBalance`) and every
+//   participant payout is an unshielded NIGHT transfer out of that vault.
 //
 // Privacy boundary:
 //   - Medical attributes enter ONLY via witnesses (never as public ledger fields).
-//   - Ledger holds study criteria, consent status, and unlinkable nullifiers.
+//   - Ledger holds study criteria, consent status, aggregate counters and unlinkable nullifiers.
 //   - Raw diagnosis / HbA1c / treatment / age never appear in export ledger.
+//   - claimReward crosses the boundary on purpose: the payout UserAddress becomes public,
+//     but it is never linked to the patient's medical values or to a patient identity.
+//
+// Amounts are unshielded NIGHT in Stars (1 NIGHT = 1_000_000 Stars).
 //
 // Compile (with official Midnight Compact toolchain):
 //   compact compile midnight/contracts/polaris-health.compact midnight/generated/polaris-health
@@ -37,18 +48,28 @@ export struct StudyCriteria {
   minTreatmentMonths: Uint<0..600>;
 }
 
+/**
+ * Public study state. Counters are aggregates only — they never identify a patient.
+ * `spent` is per-study accounting of vault money paid to its participants; it is
+ * not a budget, the only limit on a payout is the platform vault balance.
+ */
 export struct StudyRecord {
   criteria: StudyCriteria;
+  /** Reward per participant, in Stars. */
   rewardAmount: Uint<64>;
   active: Boolean;
   researcherPk: Bytes<32>;
+  spent: Uint<128>;
+  eligibleCount: Uint<64>;
+  consentCount: Uint<64>;
+  claimCount: Uint<64>;
 }
 
 export struct ConsentRecord {
   status: ConsentStatus;
   researcherPk: Bytes<32>;
   purposeHash: Bytes<32>;
-  /** bit0 = treatment, bit1 = treatment_duration */
+  /** bit0 = diagnosis, bit1 = lab result, bit2 = treatment, bit3 = treatment duration */
   scopeMask: Uint<8>;
   /** Unix seconds; consent invalid when blockTimeGte(expiresAt). */
   expiresAt: Uint<64>;
@@ -60,6 +81,7 @@ export struct ConsentRecord {
 // Public ledger (plaintext on-chain — never store raw medical values here)
 // ---------------------------------------------------------------------------
 
+/** Platform admin, fixed at deploy. Only this key can move vault liquidity. */
 export sealed ledger adminPk: Bytes<32>;
 
 export ledger studies: Map<Bytes<32>, StudyRecord>;
@@ -81,11 +103,18 @@ export ledger eligibilityProofCount: Counter;
 export ledger consentGrantCount: Counter;
 export ledger rewardClaimCount: Counter;
 
+/** Unshielded NIGHT held by the platform vault, in Stars. */
+export ledger vaultBalance: Uint<128>;
+
+/** Lifetime totals, in Stars. Deposits by the admin / payouts to participants. */
+export ledger totalFunded: Uint<128>;
+export ledger totalPaid: Uint<128>;
+
 // ---------------------------------------------------------------------------
 // Witnesses — private inputs (bodies implemented in TypeScript)
 // ---------------------------------------------------------------------------
 
-/** Patient / researcher DApp secret (32 bytes). Never disclosed. */
+/** Patient / researcher / admin DApp secret (32 bytes). Never disclosed. */
 witness localSecretKey(): Bytes<32>;
 
 /** Private medical witness fields for Study #001-style predicates. */
@@ -101,6 +130,9 @@ witness patientTreatmentMonths(): Uint<0..600>;
 
 constructor(adminSecret: Bytes<32>) {
   adminPk = disclose(deriveAdminPk(adminSecret));
+  vaultBalance = 0;
+  totalFunded = 0;
+  totalPaid = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +185,32 @@ pure circuit claimNullifier(studyId: Bytes<32>, sk: Bytes<32>): Bytes<32> {
 }
 
 /**
- * Logical eligibility predicate (mirrors DemoMidnightAdapter / Study #001).
+ * Rebuild a StudyRecord with updated mutable fields (Compact has no struct spread).
+ * criteria / rewardAmount / researcherPk are immutable after createStudy.
+ */
+pure circuit updatedStudy(
+  s: StudyRecord,
+  active: Boolean,
+  spent: Uint<128>,
+  eligibleCount: Uint<64>,
+  consentCount: Uint<64>,
+  claimCount: Uint<64>
+): StudyRecord {
+  return StudyRecord {
+    criteria: s.criteria,
+    rewardAmount: s.rewardAmount,
+    active: active,
+    researcherPk: s.researcherPk,
+    spent: spent,
+    eligibleCount: eligibleCount,
+    consentCount: consentCount,
+    claimCount: claimCount
+  };
+}
+
+/**
+ * Logical eligibility predicate for Study #001. This circuit is the only place
+ * the predicate is evaluated — there is no client-side equivalent.
  * All medical values remain witness-local.
  */
 circuit meetsCriteria(criteria: StudyCriteria): Boolean {
@@ -170,12 +227,69 @@ circuit meetsCriteria(criteria: StudyCriteria): Boolean {
     && months >= criteria.minTreatmentMonths;
 }
 
+/** Researcher-only guard: the caller's DApp secret must derive the study owner pk. */
+circuit assertResearcher(study: StudyRecord): [] {
+  assert(
+    study.researcherPk == deriveResearcherPk(localSecretKey()),
+    "not the study researcher"
+  );
+}
+
+/** Platform-only guard: the caller's DApp secret must derive the deploy-time admin pk. */
+circuit assertAdmin(): [] {
+  assert(
+    adminPk == deriveAdminPk(localSecretKey()),
+    "not the platform admin"
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Circuits — MidnightHealthProtocol entry points
+// Platform vault circuits (admin only)
 // ---------------------------------------------------------------------------
 
 /**
- * Publish a study and its public criteria commitment surface.
+ * Deposit unshielded NIGHT into the platform vault. Every participant payout is
+ * served from here, so this is the only liquidity the contract ever holds.
+ */
+export circuit fundVault(amount: Uint<128>): [] {
+  assertAdmin();
+
+  const pubAmount = disclose(amount);
+  assert(pubAmount > 0, "amount must be positive");
+
+  receiveUnshielded(nativeToken(), pubAmount);
+
+  vaultBalance = (vaultBalance + pubAmount) as Uint<128>;
+  totalFunded = (totalFunded + pubAmount) as Uint<128>;
+}
+
+/**
+ * Move liquidity out of the vault. The recipient address becomes public, which is
+ * expected: it belongs to the platform, not to a patient.
+ */
+export circuit withdrawVault(recipient: UserAddress, amount: Uint<128>): [] {
+  assertAdmin();
+
+  const pubAmount = disclose(amount);
+  assert(pubAmount > 0, "amount must be positive");
+  assert(vaultBalance >= pubAmount, "vault balance too low");
+
+  sendUnshielded(
+    nativeToken(),
+    pubAmount,
+    right<ContractAddress, UserAddress>(disclose(recipient))
+  );
+
+  vaultBalance = (vaultBalance - pubAmount) as Uint<128>;
+}
+
+// ---------------------------------------------------------------------------
+// Researcher circuits
+// ---------------------------------------------------------------------------
+
+/**
+ * Publish a study and its public criteria. No deposit is required: the laboratory
+ * settles with the platform off-chain and the vault covers the payouts.
  * Researcher identity is a DApp-derived public key (not a wallet address).
  */
 export circuit createStudy(
@@ -207,11 +321,44 @@ export circuit createStudy(
       criteria: criteria,
       rewardAmount: disclose(rewardAmount),
       active: true,
-      researcherPk: researcherPk
+      researcherPk: researcherPk,
+      spent: 0,
+      eligibleCount: 0,
+      consentCount: 0,
+      claimCount: 0
     }
   );
   studyCount.increment(1 as Uint<16>);
 }
+
+/**
+ * Stop enrollment. Existing active consents remain valid, and participants that
+ * already consented can still claim.
+ */
+export circuit closeStudy(studyId: Bytes<32>): [] {
+  const pubStudyId = disclose(studyId);
+  assert(studies.member(pubStudyId), "study not found");
+
+  const study = studies.lookup(pubStudyId);
+  assertResearcher(study);
+  assert(study.active, "study already closed");
+
+  studies.insert(
+    pubStudyId,
+    updatedStudy(
+      study,
+      false,
+      study.spent,
+      study.eligibleCount,
+      study.consentCount,
+      study.claimCount
+    )
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Patient circuits
+// ---------------------------------------------------------------------------
 
 /**
  * Prove eligibility against on-chain study criteria without disclosing medical values.
@@ -234,6 +381,18 @@ export circuit proveEligibility(studyId: Bytes<32>): Boolean {
     assert(!eligibilityNullifiers.member(nul), "eligibility already proved");
     eligibilityNullifiers.insert(nul);
     eligibilityProofCount.increment(1 as Uint<16>);
+
+    studies.insert(
+      pubStudyId,
+      updatedStudy(
+        study,
+        study.active,
+        study.spent,
+        (study.eligibleCount + 1) as Uint<64>,
+        study.consentCount,
+        study.claimCount
+      )
+    );
   }
 
   return disclose(eligible);
@@ -243,7 +402,7 @@ export circuit proveEligibility(studyId: Bytes<32>): Boolean {
  * Grant scoped research consent. Requires a prior successful eligibility proof
  * for the same study (eligibility nullifier present).
  *
- * scopeMask: bit0 = treatment, bit1 = treatment_duration
+ * scopeMask: bit0 = diagnosis, bit1 = lab result, bit2 = treatment, bit3 = duration
  */
 export circuit grantConsent(
   studyId: Bytes<32>,
@@ -283,6 +442,18 @@ export circuit grantConsent(
     }
   );
   consentGrantCount.increment(1 as Uint<16>);
+
+  studies.insert(
+    pubStudyId,
+    updatedStudy(
+      study,
+      study.active,
+      study.spent,
+      study.eligibleCount,
+      (study.consentCount + 1) as Uint<64>,
+      study.claimCount
+    )
+  );
 }
 
 /**
@@ -313,15 +484,16 @@ export circuit revokeConsent(studyId: Bytes<32>): [] {
 
 /**
  * Claim the study reward once: requires eligibility nullifier + active, unexpired consent.
- * Records a claim nullifier; does not mint/transfer tokens in this MVP circuit
- * (UI tracks 25 TEST prototype off the sanitized TransactionResult).
+ * Paid out of the platform vault — closing enrollment does not strand a payout.
+ *
+ * Privacy boundary: the payout address is disclosed by the unshielded transfer.
+ * It is not linked on-chain to the patient pk, the consent key, or any medical value.
  */
-export circuit claimReward(studyId: Bytes<32>): [] {
+export circuit claimReward(studyId: Bytes<32>, recipient: UserAddress): [] {
   const pubStudyId = disclose(studyId);
   assert(studies.member(pubStudyId), "study not found");
 
   const study = studies.lookup(pubStudyId);
-  assert(study.active, "study inactive");
 
   const sk = localSecretKey();
   const eligNul = disclose(eligibilityNullifier(pubStudyId, sk));
@@ -337,9 +509,32 @@ export circuit claimReward(studyId: Bytes<32>): [] {
 
   const claimNul = disclose(claimNullifier(pubStudyId, sk));
   assert(!rewardClaims.member(claimNul), "reward already claimed");
+
+  assert(study.rewardAmount > 0, "reward misconfigured");
+
+  const reward = study.rewardAmount as Uint<128>;
+  assert(vaultBalance >= reward, "vault underfunded");
+
+  sendUnshielded(
+    nativeToken(),
+    reward,
+    right<ContractAddress, UserAddress>(disclose(recipient))
+  );
+
   rewardClaims.insert(claimNul);
   rewardClaimCount.increment(1 as Uint<16>);
+  vaultBalance = (vaultBalance - reward) as Uint<128>;
+  totalPaid = (totalPaid + reward) as Uint<128>;
 
-  // Keep study.rewardAmount constrained so unused public criteria can't drift silently.
-  assert(study.rewardAmount > 0, "reward misconfigured");
+  studies.insert(
+    pubStudyId,
+    updatedStudy(
+      study,
+      study.active,
+      (study.spent + reward) as Uint<128>,
+      study.eligibleCount,
+      study.consentCount,
+      (study.claimCount + 1) as Uint<64>
+    )
+  );
 }

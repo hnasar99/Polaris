@@ -1,4 +1,19 @@
-export type ConsentScopeField = "treatment" | "treatment_duration";
+/**
+ * Consent scope fields. Each maps to one bit of ConsentRecord.scopeMask in
+ * polaris-health.compact (see lib/midnight/encoding.ts for the bit values).
+ */
+export type ConsentScopeField =
+  | "diagnosis"
+  | "lab_result"
+  | "treatment"
+  | "treatment_duration";
+
+export const CONSENT_SCOPE_FIELDS: ConsentScopeField[] = [
+  "diagnosis",
+  "lab_result",
+  "treatment",
+  "treatment_duration",
+];
 
 export interface ConsentScope {
   fields: ConsentScopeField[];

@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AppNav } from "@/components/AppNav";
-import { DemoBanner } from "@/components/DemoBanner";
-import { ErrorBanner } from "@/components/ErrorBanner";
-import { AppStateProvider } from "@/features/app/AppStateProvider";
+import { AppShell } from "@/components/AppShell";
+import { AppProviders } from "@/features/app/AppProviders";
+import { DEFAULT_LOCALE, LOCALE_TAGS, es } from "@/i18n";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,10 +15,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * Metadata is rendered on the server, before any stored language preference is
+ * readable, so it uses the default locale's dictionary rather than a literal.
+ */
 export const metadata: Metadata = {
-  title: "Polaris — Privacy-preserving research matching",
-  description:
-    "Midnight Hack Buenos Aires 2026 MVP: zero-knowledge patient matching and programmable consent.",
+  title: es.meta.title,
+  description: es.meta.description,
 };
 
 export default function RootLayout({
@@ -28,16 +30,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    /*
+     * Always renders the default locale so server and client agree on the first
+     * paint. I18nProvider rewrites documentElement.lang from localStorage after
+     * hydration, which is why the attribute is exempted from the check.
+     */
+    <html lang={LOCALE_TAGS[DEFAULT_LOCALE]} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}
       >
-        <AppStateProvider>
-          <DemoBanner />
-          <ErrorBanner />
-          <AppNav />
-          <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
-        </AppStateProvider>
+        <AppProviders>
+          <AppShell>{children}</AppShell>
+        </AppProviders>
       </body>
     </html>
   );

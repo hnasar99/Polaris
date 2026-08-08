@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWalletAdapter } from "@/lib/wallet/factory";
-import { LocalDemoWalletAdapter } from "@/lib/wallet/LocalDemoWalletAdapter";
 import { MidnightDappConnectorAdapter } from "@/lib/wallet/MidnightDappConnectorAdapter";
 import { UnconnectedWalletAdapter } from "@/lib/wallet/UnconnectedWalletAdapter";
 import {
@@ -10,6 +9,35 @@ import {
   WalletAdapterError,
 } from "@/lib/wallet/errors";
 import { listWallets, selectWallet } from "@/lib/wallet/selectWallet";
+
+vi.mock("@/lib/midnight/session", () => ({
+  POLARIS_ZK_ASSET_PATH: "/zk/polaris-health",
+  POLARIS_PRIVATE_STATE_ID: "PolarisPrivateState",
+  createConnectedSession: vi.fn(async () => ({
+    api: {},
+    config: {
+      networkId: "preprod",
+      indexerUri: "https://example.test/graphql",
+      indexerWsUri: "wss://example.test/graphql/ws",
+    },
+    providers: {},
+    unshieldedAddress: "mn_unshielded_test_addr",
+    coinPublicKeyBytes: new Uint8Array(32),
+  })),
+}));
+
+vi.mock("@/lib/midnight/runtime", () => ({
+  setMidnightSession: vi.fn(),
+  setMidnightDappSecret: vi.fn(),
+  clearMidnightRuntime: vi.fn(),
+  getMidnightRuntime: vi.fn(() => ({})),
+  loadPersistedContractAddress: vi.fn(() => null),
+  setMidnightContractAddress: vi.fn(),
+}));
+
+vi.mock("@/lib/midnight/secret", () => ({
+  getOrCreateDappSecret: vi.fn(() => new Uint8Array(32)),
+}));
 
 type MidnightWindow = {
   midnight?: Record<string, { name: string; connect: ReturnType<typeof vi.fn> }>;
@@ -49,27 +77,10 @@ describe("WalletAdapter stubs", () => {
     });
   });
 
-  it("createWalletAdapter returns MidnightDappConnectorAdapter when demo Midnight is off", () => {
-    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT", "false");
+  it("createWalletAdapter always returns the real DApp Connector adapter", () => {
     const wallet = createWalletAdapter();
     expect(wallet).toBeInstanceOf(MidnightDappConnectorAdapter);
-    expect(wallet.isConnected()).toBe(false);
-  });
-
-  it("createWalletAdapter returns LocalDemoWalletAdapter only when demo Midnight is on", () => {
-    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT", "true");
-    expect(createWalletAdapter()).toBeInstanceOf(LocalDemoWalletAdapter);
-  });
-
-  it("LocalDemoWalletAdapter connects and signs without inventing 1am APIs", async () => {
-    const wallet = new LocalDemoWalletAdapter();
-    expect(wallet.kind).toBe("local-demo");
-    const address = await wallet.connect();
-    expect(wallet.isConnected()).toBe(true);
-    expect(wallet.getAddress()).toBe(address);
-    const tx = await wallet.signAndSubmit({ kind: "demo" });
-    expect(tx.startsWith("demo_tx_")).toBe(true);
-    await wallet.disconnect();
+    expect(wallet.kind).toBe("dapp-connector");
     expect(wallet.isConnected()).toBe(false);
   });
 

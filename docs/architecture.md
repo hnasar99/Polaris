@@ -95,8 +95,7 @@ Home (`/`) redirects to `/vault`.
 
 | Implementation | Selection | Behavior |
 |----------------|-----------|----------|
-| `MidnightAdapter` | Default (`createMidnightProtocol`) | Throws `Midnight adapter not connected` until real Compact bindings + proof/tx path are wired |
-| `DemoMidnightAdapter` | `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true` | Local criteria evaluation only; label **DEMO PRIVACY ENGINE**; never claim ZK verified on Midnight |
+| `MidnightAdapter` | Only implementation (`createMidnightProtocol`, lazily imported) | Throws `Midnight adapter not connected` until real Compact bindings + proof/tx path are wired |
 
 Wiring details: [midnight/README.md](../midnight/README.md), [midnight/integration/README.md](../midnight/integration/README.md).
 
@@ -145,7 +144,7 @@ Once Compact contracts are connected:
 
 ## Consent source of truth
 
-`consent_views` in Supabase is an optional **UI projection**. Consent **source of truth** is intended to be Midnight once contracts are connected. Demo mode keeps an in-memory consent map inside `DemoMidnightAdapter` for walkthroughs only.
+`consent_views` in Supabase is an optional **UI projection**. Consent **source of truth** is Midnight: the on-chain consent record written by the Compact contract. Nothing else may stand in for it.
 
 ---
 

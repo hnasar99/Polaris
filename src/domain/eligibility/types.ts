@@ -6,7 +6,8 @@ import type { StudyCriteria } from "@/domain/study/types";
  * Never returned from Midnight adapters in response types.
  */
 export interface EligibilityProofInput {
-  studyId: string;
+  /** Research code used as the contract key (see types/midnight.ts). */
+  externalStudyId: string;
   criteria: StudyCriteria;
   privateWitness: PrivateMedicalWitness;
 }
@@ -18,6 +19,4 @@ export interface EligibilityResult {
   eligible: boolean;
   proofReference: string;
   transactionId: string;
-  /** Present only for DemoMidnightAdapter — never claim real ZK verification. */
-  demoMode?: boolean;
 }

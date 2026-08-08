@@ -1,3 +1,8 @@
+/**
+ * Wallet surface for the app. Heavy DApp Connector + session wiring is not
+ * re-exported here so the eager client graph stays free of Compact WASM.
+ */
+
 export type {
   WalletAdapter,
   WalletAdapterKind,
@@ -9,8 +14,6 @@ export type {
 } from "@/lib/wallet/dapp-connector-types";
 export type { WalletDetectionStatus } from "@/lib/wallet/selectWallet";
 export { UnconnectedWalletAdapter } from "@/lib/wallet/UnconnectedWalletAdapter";
-export { LocalDemoWalletAdapter } from "@/lib/wallet/LocalDemoWalletAdapter";
-export { MidnightDappConnectorAdapter } from "@/lib/wallet/MidnightDappConnectorAdapter";
 export {
   createWalletAdapter,
   getMidnightNetworkId,

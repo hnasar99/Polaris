@@ -7,29 +7,41 @@ import {
 } from "@/lib/wallet/errors";
 import { selectWallet } from "@/lib/wallet/selectWallet";
 import type { WalletAdapter } from "@/lib/wallet/WalletAdapter";
+import { POLARIS_ZK_ASSET_PATH } from "@/lib/midnight/constants";
 
 const DEFAULT_NETWORK: MidnightNetworkId = "preprod";
+
+/** Opaque session handle — concrete type lives in session.ts (WASM-heavy). */
+export type WalletSessionHandle = {
+  unshieldedAddress: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wallet configuration blob
+  config?: any;
+};
 
 /**
  * Typed Midnight DApp Connector adapter (1AM / Lace / any InitialAPI on window.midnight).
  *
- * Real connect flow (react-wallet-connector + 1am-wallet):
+ * Connect flow:
  * 1. selectWallet() via Object.values(window.midnight)
  * 2. initialApi.connect(networkId) → ConnectedAPI
- * 3. getUnshieldedAddress() + getConnectionStatus()
+ * 3. createConnectedSession (prove / balance / submit providers)
  *
- * signAndSubmit intentionally refuses until createConnectedSession + midnight-js
- * providers (proveTx / balanceUnsealedTransaction / submitTransaction) are wired.
- * This adapter must never fake a successful ZK submit.
+ * Protocol circuit calls go through MidnightAdapter (not signAndSubmit).
+ * Session / Compact modules are loaded only on connect().
  */
 export class MidnightDappConnectorAdapter implements WalletAdapter {
   readonly kind = "dapp-connector" as const;
 
   private address: string | null = null;
   private connectedApi: MidnightConnectedAPI | null = null;
+  private session: WalletSessionHandle | null = null;
   private networkId: MidnightNetworkId | string = DEFAULT_NETWORK;
+  private walletName: string | null = null;
 
-  async connect(networkId: MidnightNetworkId | string = DEFAULT_NETWORK): Promise<string> {
+  async connect(
+    networkId: MidnightNetworkId | string = DEFAULT_NETWORK,
+    walletName?: string,
+  ): Promise<string> {
     if (typeof window === "undefined") {
       throw new WalletAdapterError(
         "WALLET_SSR",
@@ -38,9 +50,9 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
     }
 
     this.networkId = networkId;
-    const wallet = selectWallet();
+    const wallet = selectWallet(walletName);
+    this.walletName = wallet.name;
 
-    // Prompts the extension; network must match the wallet's active network.
     const api = await wallet.connect(networkId);
     const { unshieldedAddress } = await api.getUnshieldedAddress();
 
@@ -49,6 +61,7 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
       if (status.status !== "connected") {
         this.connectedApi = null;
         this.address = null;
+        this.session = null;
         throw new WalletAdapterError(
           WALLET_NOT_CONNECTED,
           WALLET_NOT_CONNECTED,
@@ -58,12 +71,30 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
 
     this.connectedApi = api;
     this.address = unshieldedAddress;
+
+    const [{ createConnectedSession }, runtime, { getOrCreateDappSecret }] =
+      await Promise.all([
+        import("@/lib/midnight/session"),
+        import("@/lib/midnight/runtime"),
+        import("@/lib/midnight/secret"),
+      ]);
+
+    const session = await createConnectedSession(api, POLARIS_ZK_ASSET_PATH);
+    this.session = session;
+    this.networkId = session.config?.networkId ?? networkId;
+    runtime.setMidnightSession(session);
+    runtime.setMidnightDappSecret(getOrCreateDappSecret());
+    runtime.loadPersistedContractAddress();
+
     return unshieldedAddress;
   }
 
   async disconnect(): Promise<void> {
     this.address = null;
     this.connectedApi = null;
+    this.session = null;
+    const { clearMidnightRuntime } = await import("@/lib/midnight/runtime");
+    clearMidnightRuntime();
   }
 
   getAddress(): string | null {
@@ -74,23 +105,30 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
     return this.address !== null && this.connectedApi !== null;
   }
 
-  /**
-   * Placeholder until 1am createConnectedSession + Compact circuit submit path.
-   * Holds a reference to ConnectedAPI for future provider wiring only.
-   */
   getConnectedApi(): MidnightConnectedAPI | null {
     return this.connectedApi;
   }
 
-  getNetworkId(): MidnightNetworkId | string {
-    return this.networkId;
+  getSession(): WalletSessionHandle | null {
+    return this.session;
   }
 
+  getNetworkId(): string {
+    return String(this.networkId);
+  }
+
+  getWalletName(): string | null {
+    return this.walletName;
+  }
+
+  /**
+   * Circuit submits are handled by MidnightAdapter.callPolarisCircuit.
+   * Keep this method for WalletAdapter compatibility — do not fake ZK success.
+   */
   async signAndSubmit(_payload: unknown): Promise<string> {
     if (!this.isConnected()) {
       throw new WalletAdapterError(WALLET_NOT_CONNECTED, WALLET_NOT_CONNECTED);
     }
-    // Do not call invent APIs or pretend ZK succeeded.
     throw new WalletAdapterError(
       "WALLET_SUBMIT_NOT_WIRED",
       WALLET_SUBMIT_NOT_WIRED,

@@ -1,19 +1,14 @@
-import { LocalDemoWalletAdapter } from "@/lib/wallet/LocalDemoWalletAdapter";
 import { MidnightDappConnectorAdapter } from "@/lib/wallet/MidnightDappConnectorAdapter";
 import type { WalletAdapter } from "@/lib/wallet/WalletAdapter";
-import { isDemoMidnightEnabled } from "@/lib/midnight/factory";
 
 /**
- * Demo Midnight → clearly labeled LocalDemoWalletAdapter.
- * Default → MidnightDappConnectorAdapter (real window.midnight connect flow;
- * throws clearly if extension missing / submit not wired).
+ * The real window.midnight connect flow. It throws clearly when the extension
+ * is missing or submit is not wired, rather than simulating a connection.
  *
  * UnconnectedWalletAdapter remains available for tests and explicit stubs.
+ * Session / Compact WASM load only inside MidnightDappConnectorAdapter.connect().
  */
 export function createWalletAdapter(): WalletAdapter {
-  if (isDemoMidnightEnabled()) {
-    return new LocalDemoWalletAdapter();
-  }
   return new MidnightDappConnectorAdapter();
 }
 

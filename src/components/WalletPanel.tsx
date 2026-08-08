@@ -1,108 +1,165 @@
 "use client";
 
-import { useAppState } from "@/features/app/AppStateProvider";
+import { Badge, Button, Card, SectionHeader, Spinner } from "@/components/ui";
+import { useWallet } from "@/features/wallet/WalletProvider";
+import { useI18n } from "@/i18n";
+import { truncateAddress } from "@/lib/format";
 
 export function WalletPanel() {
+  const { t } = useI18n();
   const {
-    walletConnected,
-    walletAddress,
     walletStatus,
-    walletKind,
+    availableWallets,
+    walletName,
+    walletAddress,
+    walletConnected,
+    networkId,
     isConnecting,
-    connectWallet,
-    disconnectWallet,
-    demoMode,
-    globalError,
-  } = useAppState();
+    connect,
+    disconnect,
+    recheckWallets,
+  } = useWallet();
 
-  const walletError =
-    globalError &&
-    (globalError.code.startsWith("WALLET_") ||
-      globalError.code === "WALLET_NOT_CONNECTED")
-      ? globalError
-      : null;
-
-  const adapterLabel =
-    walletKind === "local-demo"
-      ? "Local demo stub (not 1AM)"
-      : walletKind === "dapp-connector"
-        ? "Midnight DApp Connector (window.midnight)"
-        : "Unconnected stub";
+  const statusLabel = walletConnected
+    ? t("wallet.connected")
+    : walletStatus === "checking"
+      ? t("wallet.checking")
+      : walletStatus === "detected"
+        ? t("wallet.detected")
+        : t("wallet.notFound");
 
   return (
-    <div className="rounded-xl border border-cyan-500/20 bg-[#0b1628] p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-cyan-300/90">
-        Wallet
-      </h2>
-      <p className="mt-2 text-sm text-slate-400">
-        {adapterLabel}
-        {demoMode
-          ? " — DEMO mode; addresses are ephemeral UI state."
-          : " — connect via injected Midnight wallet extension."}
-      </p>
-
-      <div className="mt-3 text-xs font-mono uppercase tracking-wider text-slate-500">
-        Status:{" "}
-        <span className="text-slate-300">
-          {walletConnected
-            ? "Connected"
-            : walletStatus === "checking"
-              ? "Checking wallet…"
-              : walletStatus === "detected"
-                ? "Detected — not connected"
-                : demoMode
-                  ? "Ready (demo)"
-                  : "Extension not found"}
-        </span>
-      </div>
-
-      {walletError && (
-        <p className="mt-3 text-sm text-rose-300" role="alert">
-          {walletError.message}
-        </p>
-      )}
+    <Card>
+      <SectionHeader
+        title={t("wallet.title")}
+        subtitle={t("wallet.subtitleReal")}
+        action={
+          <Badge
+            tone={
+              walletConnected
+                ? "success"
+                : walletStatus === "not-found"
+                  ? "warning"
+                  : "neutral"
+            }
+          >
+            {statusLabel}
+          </Badge>
+        }
+      />
 
       {walletConnected && walletAddress ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="space-y-3">
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">
-              Unshielded address
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              {t("wallet.unshieldedAddress")}
             </p>
-            <code
-              className="mt-1 block max-w-full truncate rounded bg-black/30 px-2 py-1 text-xs text-cyan-100"
-              title={walletAddress}
-            >
+            <p className="break-all font-mono text-sm text-white">
               {walletAddress}
-            </code>
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void disconnectWallet()}
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/5"
-          >
-            Disconnect
-          </button>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <span>
+              {t("wallet.network")}:{" "}
+              <span className="text-slate-200">{networkId ?? "—"}</span>
+            </span>
+            <span aria-hidden>·</span>
+            <span>{walletName ?? t("wallet.adapterConnector")}</span>
+          </div>
+          <Button variant="secondary" onClick={() => void disconnect()}>
+            {t("wallet.disconnect")}
+          </Button>
+        </div>
+      ) : walletStatus === "checking" ? (
+        <p className="flex items-center gap-2 text-sm text-slate-400">
+          <Spinner />
+          {t("wallet.checking")}
+        </p>
+      ) : walletStatus === "not-found" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">{t("wallet.install")}</p>
+          <Button variant="secondary" onClick={recheckWallets}>
+            {t("wallet.checkAgain")}
+          </Button>
+        </div>
+      ) : availableWallets.length > 1 ? (
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t("wallet.pick")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {availableWallets.map((name) => (
+              <Button
+                key={name}
+                variant="secondary"
+                disabled={isConnecting}
+                onClick={() => void connect(name)}
+              >
+                {name}
+              </Button>
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="mt-4 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => void connectWallet()}
-            disabled={isConnecting || (!demoMode && walletStatus === "checking")}
-            className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-[#041018] hover:bg-cyan-400 disabled:opacity-40"
-          >
-            {isConnecting ? "Connecting…" : "Connect Wallet"}
-          </button>
-          {!demoMode && walletStatus === "not-found" && (
-            <p className="text-xs text-slate-500">
-              Install a Midnight wallet extension (e.g. 1AM), unlock it, then
-              refresh. Wallets inject under{" "}
-              <code className="text-slate-400">window.midnight</code> (UUID
-              keys — enumerated via Object.values).
-            </p>
-          )}
-        </div>
+        <Button
+          disabled={isConnecting}
+          onClick={() => void connect(availableWallets[0])}
+        >
+          {isConnecting ? t("wallet.connecting") : t("wallet.connect")}
+        </Button>
+      )}
+    </Card>
+  );
+}
+
+/** Inline nudge for views that need a session before they can do anything. */
+export function WalletRequired() {
+  const { t } = useI18n();
+  const { walletConnected, walletStatus, connect, isConnecting, recheckWallets } =
+    useWallet();
+  if (walletConnected) return null;
+
+  const missing = walletStatus === "not-found";
+
+  return (
+    <div
+      className={
+        missing
+          ? "flex flex-wrap items-center gap-3 rounded-xl border border-amber-400/25 bg-amber-400/5 px-4 py-3"
+          : "flex flex-wrap items-center gap-3 rounded-xl border border-cyan-400/25 bg-cyan-400/5 px-4 py-3"
+      }
+    >
+      <p
+        className={
+          missing
+            ? "min-w-0 flex-1 text-sm text-amber-100"
+            : "min-w-0 flex-1 text-sm text-cyan-100"
+        }
+      >
+        {missing ? t("wallet.install") : t("wallet.required")}
+      </p>
+      {missing ? (
+        <Button variant="secondary" onClick={recheckWallets}>
+          {t("wallet.checkAgain")}
+        </Button>
+      ) : (
+        <Button disabled={isConnecting} onClick={() => void connect()}>
+          {isConnecting ? t("wallet.connecting") : t("wallet.connect")}
+        </Button>
       )}
     </div>
+  );
+}
+
+export function ContractBadge() {
+  const { t } = useI18n();
+  const { contractAddress } = useWallet();
+
+  return (
+    <Badge tone={contractAddress ? "info" : "warning"}>
+      {contractAddress
+        ? truncateAddress(contractAddress, 10, 6)
+        : t("contract.notDeployed")}
+    </Badge>
   );
 }

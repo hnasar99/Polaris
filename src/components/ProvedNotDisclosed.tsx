@@ -1,34 +1,42 @@
-export function ProvedSection() {
-  return (
-    <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-      <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">
-        Proved
-      </h3>
-      <ul className="mt-3 space-y-2 text-sm text-emerald-50">
-        <li>Eligibility: verified</li>
-        <li>Medical issuer: verified</li>
-      </ul>
-    </section>
-  );
-}
+"use client";
 
-export function NotDisclosedSection() {
+import { Card } from "@/components/ui";
+import { useI18n } from "@/i18n";
+
+/** Side-by-side summary of what a proof reveals and what it never touches. */
+export function ProvedNotDisclosed() {
+  const { t } = useI18n();
+
   return (
-    <section className="rounded-xl border border-slate-500/30 bg-slate-500/10 p-5">
-      <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
-        Not Disclosed
-      </h3>
-      <ul className="mt-3 space-y-2 text-sm text-slate-200">
-        <li>Name</li>
-        <li>Exact age</li>
-        <li>Exact HbA1c</li>
-        <li>Complete medical history</li>
-        <li>Other medical conditions</li>
-      </ul>
-      <p className="mt-4 text-xs text-slate-400">
-        Private values stay on the patient client. Only the eligibility result
-        is returned from the protocol adapter.
-      </p>
-    </section>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Card className="border-emerald-400/25 bg-emerald-400/5">
+        <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">
+          {t("privacy.provedTitle")}
+        </h3>
+        <ul className="mt-3 space-y-1.5 text-sm text-emerald-50">
+          {(["proved1", "proved2", "proved3", "proved4"] as const).map((key) => (
+            <li key={key}>{t(`privacy.${key}`)}</li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card tone="muted">
+        <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
+          {t("privacy.notDisclosedTitle")}
+        </h3>
+        <ul className="mt-3 space-y-1.5 text-sm text-slate-200">
+          {(
+            [
+              "notDisclosed1",
+              "notDisclosed2",
+              "notDisclosed3",
+              "notDisclosed4",
+            ] as const
+          ).map((key) => (
+            <li key={key}>{t(`privacy.${key}`)}</li>
+          ))}
+        </ul>
+      </Card>
+    </div>
   );
 }

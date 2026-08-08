@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# browser automation scratch profile
+/.tmp-shots/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -46,3 +49,10 @@ next-env.d.ts
 !/midnight/generated/README.md
 /midnight/contracts/node_modules/
 /midnight/contracts/src/managed/
+
+# ZK assets copied into the public dir by scripts/sync-zk-assets.mjs
+/public/zk/*/keys/
+/public/zk/*/zkir/
+
+# Supabase CLI scratch state
+/supabase/.temp/

@@ -84,9 +84,9 @@ Load synthetic record for current patient only
 **Forbidden product paths:**
 
 - `SELECT … FROM medical_records WHERE hba1c >= …` (or equivalent) to decide match for the product
-- React components that compute Study #001 eligibility for the real path
+- React components that compute Study #001 eligibility
 
-**Demo exception:** `DemoMidnightAdapter` may evaluate the logical predicate locally when `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true`. That evaluation is still behind the adapter boundary and must be labeled **DEMO PRIVACY ENGINE**. It must never be described as “ZK proof verified on Midnight”.
+**No exceptions.** There is no demo adapter and no local evaluation fallback. The eligibility predicate lives in the Compact circuit only, and a result may never be described as “ZK proof verified on Midnight” unless a proof was actually verified on-chain.
 
 ---
 

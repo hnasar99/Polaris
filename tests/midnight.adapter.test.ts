@@ -10,14 +10,14 @@ import { STUDY_001 } from "@/domain/study/study001";
 import { MidnightAdapter } from "@/lib/midnight/MidnightAdapter";
 import {
   MidnightAdapterError,
-  MIDNIGHT_NOT_CONNECTED,
+  MIDNIGHT_SESSION_REQUIRED,
 } from "@/lib/midnight/errors";
 
 describe("MidnightAdapter", () => {
-  it("throws clear not-connected errors on every protocol method (no silent success)", async () => {
+  it("fails closed without a wallet session (no silent success)", async () => {
     const adapter = new MidnightAdapter();
     const proveInput = {
-      studyId: STUDY_001.id,
+      externalStudyId: STUDY_001.externalStudyId,
       criteria: STUDY_001.criteria,
       privateWitness: {
         patientId: SYNTHETIC_PATIENT_ID,
@@ -30,16 +30,16 @@ describe("MidnightAdapter", () => {
       },
     };
 
-    const expectNotConnected = async (fn: () => Promise<unknown>) => {
+    const expectSessionRequired = async (fn: () => Promise<unknown>) => {
       await expect(fn()).rejects.toBeInstanceOf(MidnightAdapterError);
       await expect(fn()).rejects.toMatchObject({
-        code: "MIDNIGHT_NOT_CONNECTED",
-        message: MIDNIGHT_NOT_CONNECTED,
+        code: "MIDNIGHT_SESSION_REQUIRED",
+        message: MIDNIGHT_SESSION_REQUIRED,
       });
     };
 
-    await expectNotConnected(() => adapter.proveEligibility(proveInput));
-    await expectNotConnected(() =>
+    await expectSessionRequired(() => adapter.proveEligibility(proveInput));
+    await expectSessionRequired(() =>
       adapter.createStudy({
         externalStudyId: "STUDY_001",
         title: "x",
@@ -49,9 +49,9 @@ describe("MidnightAdapter", () => {
         rewardSymbol: "TEST",
       }),
     );
-    await expectNotConnected(() =>
+    await expectSessionRequired(() =>
       adapter.grantConsent({
-        studyId: STUDY_001.id,
+        externalStudyId: STUDY_001.externalStudyId,
         patientAlias: SYNTHETIC_PATIENT_ALIAS,
         researcherAlias: STUDY_001.researcherAlias,
         scope: { fields: ["treatment"] },
@@ -61,16 +61,16 @@ describe("MidnightAdapter", () => {
         rewardSymbol: "TEST",
       }),
     );
-    await expectNotConnected(() =>
+    await expectSessionRequired(() =>
       adapter.revokeConsent({
-        studyId: STUDY_001.id,
+        externalStudyId: STUDY_001.externalStudyId,
         patientAlias: SYNTHETIC_PATIENT_ALIAS,
         consentTransactionId: "tx",
       }),
     );
-    await expectNotConnected(() =>
+    await expectSessionRequired(() =>
       adapter.claimReward({
-        studyId: STUDY_001.id,
+        externalStudyId: STUDY_001.externalStudyId,
         patientAlias: SYNTHETIC_PATIENT_ALIAS,
         rewardAmount: 25,
         rewardSymbol: "TEST",
@@ -78,3 +78,4 @@ describe("MidnightAdapter", () => {
     );
   });
 });
+

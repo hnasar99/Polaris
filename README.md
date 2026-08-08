@@ -91,18 +91,10 @@ Copy [`.env.example`](./.env.example):
 |----------|---------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (optional for local fallback) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable/anon key only — **never** service-role in the client |
-| `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT` | `true` enables local **DEMO PRIVACY ENGINE**; default path uses `MidnightAdapter` (throws until real bindings) |
 | `NEXT_PUBLIC_MIDNIGHT_NETWORK` | DApp Connector network id (`undeployed` \| `preview` \| `preprod` \| `mainnet`); default `preprod` |
 
-### Demo walkthrough (no Compact yet)
-
-```env
-NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true
-```
-
-Then follow [docs/demo-flow.md](./docs/demo-flow.md).
-
-Demo mode must **never** be described as “ZK proof verified on Midnight”.
+There is no demo or simulated mode. Every eligibility, consent and reward call
+goes through `MidnightAdapter` and fails closed until a wallet session is bound.
 
 ### Supabase (optional)
 
@@ -114,7 +106,7 @@ Apply `supabase/migrations/` and `supabase/seed.sql` via Supabase CLI or dashboa
 npx vitest run
 ```
 
-Vitest covers application and demo-adapter logic only. Compact / proof verification tests belong in the Midnight toolchain after contracts compile — see [midnight/README.md](./midnight/README.md).
+Vitest covers application logic and the adapter boundary (including that every circuit call fails closed without a session). Compact / proof verification tests belong in the Midnight toolchain after contracts compile — see [midnight/README.md](./midnight/README.md).
 
 ### Scripts
 
@@ -133,10 +125,9 @@ npm run lint     # ESLint
 | Piece | Status |
 |-------|--------|
 | `MidnightHealthProtocol` + factory | Implemented |
-| `MidnightAdapter` (real path) | Stub — throws `Midnight adapter not connected` |
-| `DemoMidnightAdapter` | Env-gated local evaluation only |
+| `MidnightAdapter` (only path) | Session + circuit wiring; throws until bindings/address ready. Loaded lazily so its WASM stays out of the eager client graph. |
 | Compact source | `midnight/contracts/polaris-health.compact` — compile with official toolchain; bindings in `midnight/generated/` |
-| Wallet | `MidnightDappConnectorAdapter` connects via `window.midnight`; `signAndSubmit` throws until prove/balance/submit wired. Demo uses `LocalDemoWalletAdapter`. |
+| Wallet | `MidnightDappConnectorAdapter` connects via `window.midnight`; `signAndSubmit` throws until prove/balance/submit wired. |
 
 Wiring checklist: [midnight/README.md](./midnight/README.md).
 
@@ -158,8 +149,8 @@ Do not add hand-written fake compiler output under `midnight/generated/`.
 |-----|----------|
 | [docs/architecture.md](./docs/architecture.md) | Layers, adapters, consent SoT |
 | [docs/privacy-model.md](./docs/privacy-model.md) | Private vs public, security checklist |
-| [docs/demo-flow.md](./docs/demo-flow.md) | Hackathon walkthrough |
 | [midnight/README.md](./midnight/README.md) | Compact wiring boundary |
+| [midnight/integration/README.md](./midnight/integration/README.md) | Enabling real circuit calls; keeping WASM out of the client graph |
 
 ---
 

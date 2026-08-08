@@ -19,4 +19,6 @@ For any Midnight Network, Compact, wallet, ZK, or privacy-boundary work:
 | Tests | `testing` |
 | Env / proof server | `midnight-environment-setup` |
 
-Constraints: do not invent Compact syntax, generated bindings, or 1am APIs. `MidnightAdapter` throws until connected; demo path only with `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true`.
+Constraints: do not invent Compact syntax, generated bindings, or 1am APIs. There is no demo/simulated path — `MidnightAdapter` is the only protocol implementation and throws until a wallet session is bound. Never fabricate a proof, eligibility outcome or transaction id to make a flow appear to work.
+
+Keep Compact/ledger WASM out of the eager client graph: it compiles to async webpack modules, so a static import reaching it from a `"use client"` file makes that module async and its exports resolve as undefined at the RSC boundary. Reach `session.ts`, `bindings.ts`, `polaris-*.ts` and `MidnightAdapter` only through `await import(...)`.

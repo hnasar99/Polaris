@@ -6,61 +6,80 @@ Contract: [`../contracts/polaris-health.compact`](../contracts/polaris-health.co
 
 | Protocol method | Circuit | Notes |
 |-----------------|---------|--------|
-| `createStudy` | `createStudy(studyId, minAge, requiredDiagnosis, minHba1cScaled, requiredTreatment, minTreatmentMonths, rewardAmount)` | Encode ids/codes via `../contracts/encoding.ts` |
-| `proveEligibility` | `proveEligibility(studyId) → Boolean` | Set medical fields in `PolarisPrivateState` witnesses first |
+| `createStudy` | `createStudy(studyId, minAge, requiredDiagnosis, minHba1cScaled, requiredTreatment, minTreatmentMonths, rewardAmount)` | Encode ids/codes via `src/lib/midnight/encoding.ts` |
+| `proveEligibility` | `proveEligibility(studyId) → Boolean` | Medical fields in `PolarisPrivateState` witnesses |
 | `grantConsent` | `grantConsent(studyId, purposeHash, scopeMask, expiresAt)` | `encodeConsentScope` + `hashPurpose`; Unix `expiresAt` |
 | `revokeConsent` | `revokeConsent(studyId)` | Patient secret must match grant |
 | `claimReward` | `claimReward(studyId)` | Requires eligibility nullifier + active unexpired consent |
 
-Compile: `npm run compact --prefix midnight/contracts` → `midnight/generated/polaris-health/`.
+## Wired application path (current)
 
-Witness helpers: `../contracts/witnesses.ts` (`toPolarisPrivateState`, `witnesses`).
+```
+Wallet.connect (1AM/Lace)
+  → createConnectedSession (prove / balanceUnsealed / submit)
+  → MidnightRuntime.session
 
-## MidnightAdapter
+MidnightAdapter.proveEligibility | grantConsent | …
+  → require session + contract address + bindings
+  → callPolarisCircuit (createUnprovenCallTx / submitCallTxAsync)
+  → sanitized { eligible?, transactionId }
+```
 
-Replace each `notConnected()` throw in `src/lib/midnight/MidnightAdapter.ts` with:
+| Module | Role |
+|--------|------|
+| `src/lib/midnight/session.ts` | `createConnectedSession`, indexer patch, private state provider |
+| `src/lib/midnight/runtime.ts` | In-memory session + contract address |
+| `src/lib/midnight/polaris-tx.ts` | Deploy + circuit submit helpers |
+| `src/lib/midnight/bindings.ts` | Load generated Contract only when `NEXT_PUBLIC_POLARIS_BINDINGS_READY=true` |
+| `src/lib/midnight/MidnightAdapter.ts` | Protocol implementation (fail-closed) |
+| `src/lib/wallet/MidnightDappConnectorAdapter.ts` | Connect + session bind |
 
-1. Build `PolarisPrivateState` from `EligibilityProofInput.privateWitness` + 32-byte secret (never log it).
-2. Invoke generated Compact binding for the matching circuit above.
-3. Submit / verify via proof server + wallet providers (not a fake demo tx id).
-4. Return only sanitized results (`eligible` / `transactionId` / proof refs) — never medical fields.
+## Enable real circuit calls
+
+1. Compile on Linux/macOS/WSL: `npm run compact`
+2. Sync ZK assets: `npm run sync:zk` → `public/zk/polaris-health/`
+3. Deploy once (wallet connected): `await adapter.deploy()` or set `NEXT_PUBLIC_POLARIS_CONTRACT_ADDRESS`
+4. Set `NEXT_PUBLIC_POLARIS_BINDINGS_READY=true`
+
+Until step 4, `MidnightAdapter` throws `MIDNIGHT_BINDINGS_MISSING` (never fake ZK success).
+
+## MidnightAdapter readiness errors
+
+| Code | Meaning |
+|------|---------|
+| `MIDNIGHT_SESSION_REQUIRED` | Wallet/session not connected |
+| `MIDNIGHT_CONTRACT_ADDRESS_REQUIRED` | No deploy address in env/runtime |
+| `MIDNIGHT_BINDINGS_MISSING` | Compact output not linked / flag false |
 
 ## Wallet (DApp Connector → 1AM)
-
-Current boundary in `src/lib/wallet/`:
 
 | Adapter | Role |
 |---------|------|
 | `UnconnectedWalletAdapter` | Pure stub for tests |
-| `LocalDemoWalletAdapter` | Labeled local demo when `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true` |
-| `MidnightDappConnectorAdapter` | Default: real `window.midnight` connect via DApp Connector patterns |
+| `MidnightDappConnectorAdapter` | `window.midnight` connect + `createConnectedSession` (what `createWalletAdapter()` always returns) |
 
 ### Connect (implemented)
 
-Aligned with `react-wallet-connector` + `1am-wallet` skills:
+1. Enumerate `Object.values(window.midnight)`
+2. `initialApi.connect(networkId)` with `NEXT_PUBLIC_MIDNIGHT_NETWORK` (default `preprod`)
+3. `createConnectedSession(api, "/zk/polaris-health")`
+4. Persist DApp secret in `localStorage` (`polaris:dapp-secret-v1`)
 
-1. Enumerate `Object.values(window.midnight)` (UUID keys — do not hardcode lace-only keys).
-2. `initialApi.connect(networkId)` with `NEXT_PUBLIC_MIDNIGHT_NETWORK` (default `preprod`).
-3. `getUnshieldedAddress()` + optional `getConnectionStatus()`.
+### Next.js
 
-### Complete 1AM wiring later (not yet)
+- `next dev --webpack` / `next build --webpack` (WASM + topLevelAwait)
+- `src/lib/isomorphic-ws-fix.mjs` aliased for `isomorphic-ws`
 
-When Compact bindings + ZK assets exist, finish the dust-free path from `1am-wallet` / `midnight-js` (browser):
+### Keep WASM out of the eager client graph
 
-1. After connect, call `createConnectedSession(api)`:
-   - Parallel: `getConfiguration()`, `getUnshieldedAddress()`, `getShieldedAddresses()`
-   - `setNetworkId(config.networkId)` before any SDK ops
-   - `FetchZkConfigProvider` for hosted ZK assets
-   - `api.getProvingProvider(zkConfigProvider)` + custom `proveTx` (`unprovenTx.prove` + `CostModel`)
-   - `walletProvider.balanceTx` → `api.balanceUnsealedTransaction`
-   - `midnightProvider.submitTx` → `api.submitTransaction`
-   - Patched indexer public data provider (`offset: null` workaround)
-2. Wire `MidnightHealthProtocol` methods to `createUnprovenCallTx` / `submitTxAsync` (or deploy pattern).
-3. Implement `signAndSubmit` (or replace it) using that session — **never fake ZK success**.
-4. For Next.js: WebSocket shim + webpack `asyncWebAssembly` / `topLevelAwait` (see 1am-wallet §12); pin matching `@midnight-ntwrk/*` versions from the skill.
+`asyncWebAssembly` makes every Compact/ledger WASM module an **async webpack
+module**, and that property propagates up static import edges. If a `"use
+client"` file statically reaches one, the client module itself becomes async and
+its exports read back as `undefined` at the RSC boundary — you get
+`X is not a function` or `ChunkLoadError: Loading chunk app/layout failed`.
 
-Optional: install `@midnight-ntwrk/dapp-connector-api@4.0.1` for official Window types (local stubs live in `dapp-connector-types.ts` today to avoid pulling the full SDK into the scaffold).
-
-## Demo mode
-
-`NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true` selects `DemoMidnightAdapter` + `LocalDemoWalletAdapter` and shows a **DEMO PRIVACY ENGINE** banner. Disable for any claim of real Midnight verification.
+So `session.ts`, `bindings.ts`, `polaris-tx.ts`, `polaris-read.ts` and
+`MidnightAdapter.ts` must only ever be reached via `await import(...)`.
+`src/lib/midnight/index.ts` and `src/lib/wallet/index.ts` are the safe barrels;
+shared leaf helpers (hex, encoding, ids) live in `src/lib/midnight/encoding.ts`
+and `src/lib/midnight/constants.ts`, which import no WASM.

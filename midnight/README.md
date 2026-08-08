@@ -44,9 +44,8 @@ Application-facing code (already in the app):
 | Path | Role |
 |------|------|
 | `src/lib/midnight/protocol.ts` | `MidnightHealthProtocol` interface |
-| `src/lib/midnight/MidnightAdapter.ts` | Real path — throws until connected |
-| `src/lib/midnight/DemoMidnightAdapter.ts` | Env-gated **DEMO PRIVACY ENGINE** |
-| `src/lib/midnight/factory.ts` | `createMidnightProtocol()` |
+| `src/lib/midnight/MidnightAdapter.ts` | Only implementation — throws until connected |
+| `src/lib/midnight/factory.ts` | `createMidnightProtocol()` — lazy proxy that keeps Compact WASM out of the eager client graph |
 | `src/lib/wallet/` | `WalletAdapter` boundary (1am mapping later) |
 | `src/types/midnight.ts` | Sanitized request/result types |
 
@@ -71,7 +70,7 @@ Frontend contract (product path):
 3. Call `MidnightHealthProtocol.proveEligibility()`.
 4. Render only `{ eligible, proofReference, transactionId }` (+ consent/reward flows).
 
-**Eligibility is never a Supabase SQL product path and never a React business-rule eligibility engine on the real path.** The demo adapter may evaluate criteria locally only when `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true`, and must be labeled **DEMO PRIVACY ENGINE**.
+**Eligibility is never a Supabase SQL product path and never a React business-rule eligibility engine.** The predicate lives in the Compact circuit only; there is no local evaluation fallback.
 
 ---
 
@@ -82,10 +81,10 @@ Frontend contract (product path):
 3. **Configure network + deployment address** (placeholders below).
 4. **Configure proof server** for the environment that generates proofs (e.g. local Docker on port 6300).
 5. **Map wallet provider** (1am / DApp Connector) onto `src/lib/wallet/WalletAdapter` using official APIs only.
-6. **Implement `MidnightAdapter`** methods by calling generated bindings + submitting via wallet — see `integration/README.md`.
+6. **`MidnightAdapter` + session wiring** are in place (`src/lib/midnight/session.ts`, `polaris-tx.ts`). Circuit calls activate after compile + `NEXT_PUBLIC_POLARIS_BINDINGS_READY=true`.
 7. **Keep responses sanitized** — never return private medical attributes to the UI.
-8. Set `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=false` once the real adapter is connected.
-9. Run Compact / proof integration tests in the Midnight environment; keep Vitest for app/demo logic only.
+8. Set `NEXT_PUBLIC_POLARIS_CONTRACT_ADDRESS` (or call `adapter.deploy()`).
+9. Run Compact / proof integration tests in the Midnight environment; keep Vitest for app logic and the adapter boundary only.
 
 ---
 
@@ -142,14 +141,15 @@ Privacy design intent (from Midnight Compact patterns — implement only with re
 
 ---
 
-## Demo vs real language rules
+## Language rules
 
-| Mode | When | Allowed language |
-|------|------|------------------|
-| `DemoMidnightAdapter` | `NEXT_PUBLIC_ENABLE_DEMO_MIDNIGHT=true` | **DEMO PRIVACY ENGINE**, local evaluation |
-| `MidnightAdapter` | default | Throws until connected; after wiring, only claim Midnight/ZK verification if proofs are actually verified |
+`MidnightAdapter` is the only protocol implementation. It throws until a wallet
+session is bound, and after wiring you may only claim Midnight/ZK verification
+if proofs are actually generated and verified on-chain.
 
-Never label demo results as “ZK proof verified on Midnight”.
+There is no demo or simulated path: never fabricate a proof reference,
+eligibility outcome or transaction id, and never describe an unverified result
+as “ZK proof verified on Midnight”.
 
 ---
 

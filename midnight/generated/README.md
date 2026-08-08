@@ -31,4 +31,4 @@ midnight/contracts/polaris-health.compact
 
 The factory must keep returning `MidnightAdapter` (throwing `Midnight adapter not connected`) until imports from this folder are real and methods are implemented.
 
-Demo evaluation stays in `DemoMidnightAdapter` and must never import fake “proof” modules from here.
+There is no demo adapter and no local evaluation fallback: never add a hand-written “proof” module here to make a flow appear to work.

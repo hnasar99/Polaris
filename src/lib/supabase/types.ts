@@ -33,6 +33,29 @@ export interface DbStudy {
   reward_symbol: string;
   active: boolean;
   created_at: string;
+  contract_study_id?: string | null;
+  researcher_pk?: string | null;
+  reward_stars?: number | null;
+  chain_tx_id?: string | null;
+  contract_address?: string | null;
+}
+
+export interface DbMedicalStudy {
+  id: string;
+  patient_id: string;
+  kind: string;
+  title: string;
+  issuer_id: string;
+  issued_at: string;
+  age: number | null;
+  diagnosis_code: string | null;
+  hba1c_scaled: number | null;
+  treatment_code: string | null;
+  treatment_months: number | null;
+  file_path: string | null;
+  file_name: string | null;
+  verified: boolean;
+  created_at: string;
 }
 
 export interface DbConsentView {

@@ -1,5 +1,6 @@
 /**
- * Encoding helpers shared by Compact witnesses and (later) MidnightAdapter.
+ * Encoding helpers for Compact witnesses.
+ * App adapter copy: `src/lib/midnight/encoding.ts` — keep behavior in sync.
  *
  * Compact `pad(32, str)` left-pads / truncates to 32 bytes. We mirror that
  * for diagnosis/treatment codes and study id material passed as Bytes<32>.
@@ -35,17 +36,31 @@ export async function encodeStudyId(studyId: string): Promise<Uint8Array> {
   return pad32(studyId);
 }
 
-/** Consent scope bitmask matching polaris-health.compact */
-export const SCOPE_TREATMENT = 0b01;
-export const SCOPE_TREATMENT_DURATION = 0b10;
+/** Consent scope bitmask matching polaris-health.compact ConsentRecord.scopeMask */
+export const SCOPE_DIAGNOSIS = 0b0001;
+export const SCOPE_LAB_RESULT = 0b0010;
+export const SCOPE_TREATMENT = 0b0100;
+export const SCOPE_TREATMENT_DURATION = 0b1000;
+
+const SCOPE_BITS: Record<string, number> = {
+  diagnosis: SCOPE_DIAGNOSIS,
+  lab_result: SCOPE_LAB_RESULT,
+  treatment: SCOPE_TREATMENT,
+  treatment_duration: SCOPE_TREATMENT_DURATION,
+};
 
 export function encodeConsentScope(fields: string[]): number {
   let mask = 0;
   for (const field of fields) {
-    if (field === "treatment") mask |= SCOPE_TREATMENT;
-    if (field === "treatment_duration") mask |= SCOPE_TREATMENT_DURATION;
+    mask |= SCOPE_BITS[field] ?? 0;
   }
   return mask;
+}
+
+export function decodeConsentScope(mask: number): string[] {
+  return Object.entries(SCOPE_BITS)
+    .filter(([, bit]) => (mask & bit) !== 0)
+    .map(([field]) => field);
 }
 
 export async function hashPurpose(purpose: string): Promise<Uint8Array> {

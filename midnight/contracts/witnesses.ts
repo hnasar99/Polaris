@@ -37,7 +37,7 @@ export type WitnessContextLike<PS> = {
 
 function clampUint(value: number, maxExclusive: number): bigint {
   if (!Number.isFinite(value) || value < 0) {
-    return 0n;
+    return BigInt(0);
   }
   const floored = Math.floor(value);
   return BigInt(Math.min(floored, maxExclusive - 1));
