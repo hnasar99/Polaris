@@ -1,4 +1,7 @@
-import { WalletAdapterError } from "@/lib/wallet/errors";
+import {
+  WalletAdapterError,
+  classifyWalletConnectFailure,
+} from "@/lib/wallet/errors";
 
 export class MidnightAdapterError extends Error {
   readonly code: string;
@@ -48,17 +51,15 @@ export function sanitizeError(error: unknown): {
         return { code: knownCodes(known), message: known };
       }
     }
-    if (msg.includes("Wallet not connected")) {
-      return {
-        code: "WALLET_NOT_CONNECTED",
-        message: "Wallet not connected",
-      };
-    }
-    if (msg.includes("No Midnight wallet found")) {
-      return {
-        code: "WALLET_EXTENSION_MISSING",
-        message: msg,
-      };
+    // Only remap clearly wallet/session-shaped failures; leave other Errors
+    // as UNKNOWN so circuit/protocol codes are not mislabeled.
+    if (
+      /wallet|midnight|1am|lace|network|preprod|preview|wasm|webassembly|proving|reject|denied|extension/i.test(
+        msg,
+      )
+    ) {
+      const classified = classifyWalletConnectFailure(error);
+      return { code: classified.code, message: classified.message };
     }
     // Never forward raw Error.message that might contain private payloads.
     return {

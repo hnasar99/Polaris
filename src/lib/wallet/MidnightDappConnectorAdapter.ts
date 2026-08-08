@@ -1,10 +1,14 @@
 import type { MidnightNetworkId } from "@/lib/wallet/dapp-connector-types";
 import type { MidnightConnectedAPI } from "@/lib/wallet/dapp-connector-types";
 import {
+  WALLET_CONNECT_REJECTED,
   WALLET_NOT_CONNECTED,
+  WALLET_SSR,
   WALLET_SUBMIT_NOT_WIRED,
   WalletAdapterError,
+  classifyWalletConnectFailure,
 } from "@/lib/wallet/errors";
+import { readUnshieldedBalanceNight } from "@/lib/wallet/balances";
 import { selectWallet } from "@/lib/wallet/selectWallet";
 import type { WalletAdapter } from "@/lib/wallet/WalletAdapter";
 import { POLARIS_ZK_ASSET_PATH } from "@/lib/midnight/constants";
@@ -44,55 +48,66 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
   ): Promise<string> {
     if (typeof window === "undefined") {
       throw new WalletAdapterError(
-        "WALLET_SSR",
+        WALLET_SSR,
         "Midnight wallet connect requires a browser environment.",
       );
     }
 
+    // Clear any half-open state from a previous failed attempt so a retry
+    // always starts from the InitialAPI (and can re-prompt the extension).
+    this.resetLocal();
     this.networkId = networkId;
-    const wallet = selectWallet(walletName);
-    this.walletName = wallet.name;
 
-    const api = await wallet.connect(networkId);
-    const { unshieldedAddress } = await api.getUnshieldedAddress();
+    try {
+      const wallet = selectWallet(walletName);
+      this.walletName = wallet.name;
 
-    if (typeof api.getConnectionStatus === "function") {
-      const status = await api.getConnectionStatus();
-      if (status.status !== "connected") {
-        this.connectedApi = null;
-        this.address = null;
-        this.session = null;
-        throw new WalletAdapterError(
-          WALLET_NOT_CONNECTED,
-          WALLET_NOT_CONNECTED,
-        );
+      const api = await wallet.connect(networkId);
+      const { unshieldedAddress } = await api.getUnshieldedAddress();
+
+      if (typeof api.getConnectionStatus === "function") {
+        const status = await api.getConnectionStatus();
+        if (status.status !== "connected") {
+          throw new WalletAdapterError(WALLET_CONNECT_REJECTED);
+        }
       }
+
+      this.connectedApi = api;
+      this.address = unshieldedAddress;
+
+      const [{ createConnectedSession }, runtime, { getOrCreateDappSecret }] =
+        await Promise.all([
+          import("@/lib/midnight/session"),
+          import("@/lib/midnight/runtime"),
+          import("@/lib/midnight/secret"),
+        ]);
+
+      const session = await createConnectedSession(api, POLARIS_ZK_ASSET_PATH);
+      this.session = session;
+      this.networkId = session.config?.networkId ?? networkId;
+      runtime.setMidnightSession(session);
+      runtime.setMidnightDappSecret(getOrCreateDappSecret());
+      runtime.loadPersistedContractAddress();
+
+      return unshieldedAddress;
+    } catch (error) {
+      this.resetLocal();
+      const { clearMidnightRuntime } = await import("@/lib/midnight/runtime");
+      clearMidnightRuntime();
+      throw classifyWalletConnectFailure(error);
     }
-
-    this.connectedApi = api;
-    this.address = unshieldedAddress;
-
-    const [{ createConnectedSession }, runtime, { getOrCreateDappSecret }] =
-      await Promise.all([
-        import("@/lib/midnight/session"),
-        import("@/lib/midnight/runtime"),
-        import("@/lib/midnight/secret"),
-      ]);
-
-    const session = await createConnectedSession(api, POLARIS_ZK_ASSET_PATH);
-    this.session = session;
-    this.networkId = session.config?.networkId ?? networkId;
-    runtime.setMidnightSession(session);
-    runtime.setMidnightDappSecret(getOrCreateDappSecret());
-    runtime.loadPersistedContractAddress();
-
-    return unshieldedAddress;
   }
 
-  async disconnect(): Promise<void> {
+  private resetLocal(): void {
     this.address = null;
     this.connectedApi = null;
     this.session = null;
+    this.walletName = null;
+  }
+
+  async disconnect(): Promise<void> {
+    this.resetLocal();
+    this.networkId = DEFAULT_NETWORK;
     const { clearMidnightRuntime } = await import("@/lib/midnight/runtime");
     clearMidnightRuntime();
   }
@@ -121,17 +136,19 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
     return this.walletName;
   }
 
+  async getUnshieldedBalanceNight(): Promise<number | null> {
+    if (!this.connectedApi) return null;
+    return readUnshieldedBalanceNight(this.connectedApi);
+  }
+
   /**
    * Circuit submits are handled by MidnightAdapter.callPolarisCircuit.
    * Keep this method for WalletAdapter compatibility — do not fake ZK success.
    */
   async signAndSubmit(_payload: unknown): Promise<string> {
     if (!this.isConnected()) {
-      throw new WalletAdapterError(WALLET_NOT_CONNECTED, WALLET_NOT_CONNECTED);
+      throw new WalletAdapterError(WALLET_NOT_CONNECTED);
     }
-    throw new WalletAdapterError(
-      "WALLET_SUBMIT_NOT_WIRED",
-      WALLET_SUBMIT_NOT_WIRED,
-    );
+    throw new WalletAdapterError(WALLET_SUBMIT_NOT_WIRED);
   }
 }

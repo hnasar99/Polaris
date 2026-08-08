@@ -58,7 +58,7 @@ export const es = {
       "Desplegá el contrato y mantené el vault de liquidez fondeado para que los participantes puedan cobrar.",
     patientPoint1: "Tus estudios se quedan en tu dispositivo",
     patientPoint2: "El cruce con los criterios corre local",
-    patientPoint3: "Cobrás en NIGHT cuando consentís",
+    patientPoint3: "Cobrás en NIGHT al hacer claim",
     labPoint1: "Publicás criterios, nunca ves pacientes",
     labPoint2: "Seguís una cohorte agregada y anónima",
     labPoint3: "Sin depósito: paga el vault de la plataforma",
@@ -105,12 +105,14 @@ export const es = {
     adapterNone: "Sin conectar",
     pick: "Billeteras disponibles",
     required: "Conectá tu billetera para continuar.",
+    patientRequired:
+      "Conectá tu billetera para probar elegibilidad, dar consentimiento y cobrar.",
     stepLabel: "Antes de empezar",
     stepTitle: "Conectá tu billetera de Midnight",
     stepBody:
       "La billetera firma las transacciones y recibe los pagos. Podés recorrer la app sin conectarla, pero las acciones on-chain necesitan una.",
     optionalHint:
-      "Podés entrar sin billetera: te la vamos a pedir recién cuando haya que firmar algo.",
+      "Los pacientes conectan billetera para firmar y cobrar. El laboratorio no necesita conectar la suya.",
   },
   contract: {
     title: "Contrato MedNight",
@@ -184,9 +186,9 @@ export const es = {
     how3Title: "Probás elegibilidad con ZK",
     how3Body:
       "El circuito de Compact evalúa edad, diagnóstico, HbA1c y tratamiento, y publica solo el resultado y un marcador de un solo uso.",
-    how4Title: "Consentís y cobrás",
+    how4Title: "Consentís, hacés claim y cobrás",
     how4Body:
-      "El consentimiento es una llamada al contrato con alcance y vencimiento, revocable cuando quieras. El pago sale del vault de la plataforma.",
+      "El consentimiento autoriza la participación con alcance y vencimiento. El claim transfiere NIGHT desde el vault de la plataforma a tu billetera.",
     splitEyebrow: "Sin letra chica",
     splitTitle: "Qué queda privado y qué es público",
     splitSubtitle:
@@ -212,7 +214,7 @@ export const es = {
       "Un mismo contrato, dos experiencias que nunca se cruzan con datos personales en el medio.",
     ctaTitle: "Empezá por tu lado del mostrador",
     ctaSubtitle:
-      "Elegí un rol para entrar. No hay registro ni contraseña: tu billetera de Midnight es tu identidad.",
+      "Elegí paciente o laboratorio. Solo los pacientes conectan billetera para probar, consentir y cobrar.",
     footerTagline:
       "Historias clínicas privadas y matching de investigación sobre Midnight Network.",
     footerBuilt: "Hecho para el Midnight Hack Buenos Aires 2026",
@@ -232,7 +234,8 @@ export const es = {
     dataEmpty: "Todavía no cargaste datos clínicos",
     dataEmptyCta: "Cargá tu primer estudio para ver para qué calificás.",
     openVault: "Gestionar mis datos",
-    connectFirst: "Conectá tu billetera para probar elegibilidad y cobrar.",
+    connectFirst:
+      "Conectá tu billetera para probar elegibilidad, dar consentimiento y cobrar.",
   },
   vault: {
     title: "Bóveda privada de salud",
@@ -415,7 +418,12 @@ export const es = {
       "El vault de la plataforma no cubre otro pago de {amount} NIGHT. Los participantes no van a poder cobrar hasta que la plataforma lo recargue.",
     notOnChain: "Todavía no está en el ledger",
     notOnChainHint:
-      "Los metadatos quedaron guardados. Conectá una billetera con el contrato compilado para publicarla on-chain.",
+      "Los metadatos quedaron guardados. La plataforma debe tener el contrato desplegado y una sesión activa en la consola admin para publicar on-chain.",
+    platformNoContract:
+      "La plataforma todavía no desplegó el contrato. Un operador debe desplegarlo desde la consola admin antes de publicar investigaciones on-chain.",
+    platformNoSession:
+      "No hay sesión de plataforma activa. Un operador debe conectar la billetera de la plataforma desde la consola admin.",
+    platformAdminLink: "Abrir consola de la plataforma",
     codeTaken: "Ese código ya lo usa otra investigación.",
     cohortEmpty:
       "Todavía no hay pruebas. Compartí el código de la investigación con tus pacientes.",
@@ -439,13 +447,28 @@ export const es = {
     withdrawing: "Retirando…",
     empty: "El vault está vacío. Depositá NIGHT para que los pacientes cobren.",
     low: "Saldo bajo — recargá para que los pacientes puedan seguir cobrando.",
-    isAdmin: "Esta billetera es la administradora del contrato",
-    notAdmin: "Esta billetera no es la administradora del contrato",
+    isAdmin: "Este navegador es admin del contrato",
+    notAdmin: "Este navegador no es admin del contrato",
     notAdminBody:
-      "Los circuitos del vault verifican la clave de admin sellada en el despliegue. Conectá el navegador que desplegó este contrato o desplegá uno nuevo.",
+      "El admin no es la wallet de 1AM: es un secreto guardado en este navegador al desplegar. Si pegaste una address de otro lado o borraste datos del sitio, desplegá de nuevo desde acá (o usá el mismo perfil de Chrome que hizo el deploy).",
     contractTitle: "Configuración del contrato",
     contractBody:
       "Desplegá el contrato una vez y compartí esta dirección. Pacientes y laboratorios leen y escriben ahí.",
+    deployNeedsWallet:
+      "Conectá la billetera 1AM arriba para habilitar el despliegue.",
+    deployNetwork: "Se desplegará en la red {network} (la de tu sesión conectada).",
+    deploySavedHint:
+      "Dirección guardada en este navegador. Depositá en el vault abajo para que los pacientes puedan cobrar.",
+    pasteNotAdmin:
+      "Si pegás una address de otro deploy, este navegador no será admin y no podrás fondear el vault.",
+    fundAfterDeploy:
+      "Contrato desplegado. Depositá NIGHT en el vault — el monto propuesto es tu saldo unshielded (podés editarlo).",
+    walletBalance: "Saldo unshielded en la wallet: {amount} NIGHT",
+    useWalletBalance: "Usar saldo total de la wallet",
+    demoWalletNote:
+      "Demo con una sola 1AM: acá depositás liquidez como plataforma; en /patient la misma wallet cobra con claimReward. Retirar del vault es solo para la plataforma (withdrawVault), no es el claim del paciente.",
+    withdrawExplain:
+      "Retiro de liquidez de plataforma (withdrawVault). Los pacientes cobran solos con claimReward desde /patient.",
   },
   privacy: {
     provedTitle: "Probado con conocimiento cero",
@@ -473,11 +496,15 @@ export const es = {
       "No se encontró una billetera Midnight. Instalá 1AM o Lace, desbloqueala y volvé a buscar.",
     WALLET_NOT_CONNECTED: "Conectá tu billetera primero.",
     WALLET_CONNECT_REJECTED: "La billetera rechazó la conexión.",
+    WALLET_NETWORK_MISMATCH:
+      "La red de la billetera no coincide con la app (Polaris usa preprod). En 1AM elegí la red Preprod y volvé a conectar.",
+    WALLET_SESSION_FAILED:
+      "La extensión autorizó, pero falló al armar la sesión Midnight. Revisá que 1AM esté desbloqueada, en preprod, y mirá la consola del navegador.",
     WALLET_SSR: "La billetera solo está disponible en el navegador.",
     WALLET_SUBMIT_NOT_WIRED:
       "La billetera está conectada solo para dirección y sesión. El envío de transacciones todavía no está cableado.",
     MIDNIGHT_SESSION_REQUIRED:
-      "Conectá una billetera para abrir una sesión de Midnight.",
+      "No hay sesión de Midnight activa. Los pacientes conectan su billetera; el laboratorio usa la sesión de la plataforma en la consola admin.",
     MIDNIGHT_CONTRACT_ADDRESS_REQUIRED:
       "No hay dirección de contrato. Desplegá el contrato o pegá una existente.",
     MIDNIGHT_BINDINGS_MISSING:

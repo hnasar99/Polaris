@@ -156,6 +156,19 @@ export async function loadStudy001(): Promise<Study> {
 }
 
 export async function loadActiveStudies(): Promise<Study[]> {
-  const study = await loadStudy001();
-  return [study];
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return [STUDY_001];
+  }
+
+  const { data, error } = await supabase
+    .from("studies")
+    .select("*")
+    .eq("active", true)
+    .order("created_at", { ascending: true });
+
+  if (error || !data?.length) {
+    return [STUDY_001];
+  }
+  return (data as DbStudy[]).map(mapStudy);
 }

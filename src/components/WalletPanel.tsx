@@ -6,7 +6,7 @@ import { useI18n } from "@/i18n";
 import { truncateAddress } from "@/lib/format";
 
 export function WalletPanel() {
-  const { t } = useI18n();
+  const { t, formatNumber } = useI18n();
   const {
     walletStatus,
     availableWallets,
@@ -14,6 +14,7 @@ export function WalletPanel() {
     walletAddress,
     walletConnected,
     networkId,
+    unshieldedBalanceNight,
     isConnecting,
     connect,
     disconnect,
@@ -66,6 +67,15 @@ export function WalletPanel() {
             <span aria-hidden>·</span>
             <span>{walletName ?? t("wallet.adapterConnector")}</span>
           </div>
+          {unshieldedBalanceNight !== null ? (
+            <p className="text-xs text-slate-400">
+              {t("admin.walletBalance", {
+                amount: formatNumber(unshieldedBalanceNight, {
+                  maximumFractionDigits: 6,
+                }),
+              })}
+            </p>
+          ) : null}
           <Button variant="secondary" onClick={() => void disconnect()}>
             {t("wallet.disconnect")}
           </Button>
@@ -115,11 +125,18 @@ export function WalletPanel() {
 /** Inline nudge for views that need a session before they can do anything. */
 export function WalletRequired() {
   const { t } = useI18n();
-  const { walletConnected, walletStatus, connect, isConnecting, recheckWallets } =
-    useWallet();
+  const {
+    walletConnected,
+    walletStatus,
+    availableWallets,
+    connect,
+    isConnecting,
+    recheckWallets,
+  } = useWallet();
   if (walletConnected) return null;
 
   const missing = walletStatus === "not-found";
+  const checking = walletStatus === "checking";
 
   return (
     <div
@@ -136,15 +153,41 @@ export function WalletRequired() {
             : "min-w-0 flex-1 text-sm text-cyan-100"
         }
       >
-        {missing ? t("wallet.install") : t("wallet.required")}
+        {missing
+          ? t("wallet.install")
+          : checking
+            ? t("wallet.checking")
+            : t("wallet.patientRequired")}
       </p>
       {missing ? (
         <Button variant="secondary" onClick={recheckWallets}>
           {t("wallet.checkAgain")}
         </Button>
+      ) : checking ? (
+        <Spinner />
+      ) : availableWallets.length > 1 ? (
+        <div className="flex flex-wrap gap-2">
+          {availableWallets.map((name) => (
+            <Button
+              key={name}
+              variant="secondary"
+              disabled={isConnecting}
+              onClick={() => void connect(name)}
+            >
+              {isConnecting ? t("wallet.connecting") : name}
+            </Button>
+          ))}
+        </div>
       ) : (
-        <Button disabled={isConnecting} onClick={() => void connect()}>
-          {isConnecting ? t("wallet.connecting") : t("wallet.connect")}
+        <Button
+          disabled={isConnecting || availableWallets.length === 0}
+          onClick={() => void connect(availableWallets[0])}
+        >
+          {isConnecting
+            ? t("wallet.connecting")
+            : availableWallets[0]
+              ? `${t("wallet.connect")} · ${availableWallets[0]}`
+              : t("wallet.connect")}
         </Button>
       )}
     </div>

@@ -18,6 +18,7 @@ export function ContractPanel() {
     setContractAddress,
     forgetContractAddress,
     walletConnected,
+    networkId,
   } = useWallet();
   const [draft, setDraft] = useState("");
 
@@ -43,12 +44,23 @@ export function ContractPanel() {
               {contractAddress}
             </p>
           </div>
+          <p className="text-xs text-slate-500">{t("admin.deploySavedHint")}</p>
           <Button variant="ghost" onClick={forgetContractAddress}>
             {t("contract.clear")}
           </Button>
         </div>
       ) : (
         <div className="space-y-4">
+          {!walletConnected ? (
+            <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+              {t("admin.deployNeedsWallet")}
+            </p>
+          ) : networkId ? (
+            <p className="text-xs text-slate-500">
+              {t("admin.deployNetwork", { network: networkId })}
+            </p>
+          ) : null}
+
           <Button
             disabled={isDeploying || !walletConnected}
             onClick={() => void deploy()}
@@ -77,9 +89,9 @@ export function ContractPanel() {
               </Button>
             </div>
           </Field>
+          <p className="text-xs text-slate-500">{t("admin.pasteNotAdmin")}</p>
         </div>
       )}
     </Card>
   );
 }
-

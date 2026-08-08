@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useWallet } from "@/features/wallet/WalletProvider";
 import { errorMessageKey, useI18n } from "@/i18n";
@@ -31,6 +32,47 @@ export function ErrorBanner() {
  * Shown while the Compact output is missing: on-chain calls fail on purpose
  * instead of faking success, so the UI has to say why.
  */
+/**
+ * Laboratory views publish on-chain through the platform session bound in the
+ * admin console — not through a lab wallet connect UI.
+ */
+export function PlatformSetupNotice() {
+  const { t } = useI18n();
+  const { contractAddress, walletConnected, bindingsReady } = useWallet();
+
+  if (!bindingsReady) return null;
+
+  if (!contractAddress) {
+    return (
+      <div className="rounded-xl border border-amber-400/25 bg-amber-400/5 px-4 py-3">
+        <p className="text-sm text-amber-100">{t("lab.platformNoContract")}</p>
+        <Link
+          href="/admin"
+          className="mt-2 inline-block text-sm font-semibold text-amber-200 underline-offset-2 hover:underline"
+        >
+          {t("lab.platformAdminLink")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (!walletConnected) {
+    return (
+      <div className="rounded-xl border border-amber-400/25 bg-amber-400/5 px-4 py-3">
+        <p className="text-sm text-amber-100">{t("lab.platformNoSession")}</p>
+        <Link
+          href="/admin"
+          className="mt-2 inline-block text-sm font-semibold text-amber-200 underline-offset-2 hover:underline"
+        >
+          {t("lab.platformAdminLink")}
+        </Link>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export function SetupNotice() {
   const { bindingsReady } = useWallet();
   const { t } = useI18n();

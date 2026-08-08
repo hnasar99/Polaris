@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Card, Field, SectionHeader, Spinner, inputClass } from "@/components/ui";
 import { DIAGNOSIS_CODES, TREATMENT_CODES } from "@/domain/medical/constants";
 import { useChain } from "@/features/chain/ChainProvider";
+import { usePlatformSessionReady } from "@/features/wallet/usePlatformSessionReady";
 import { useI18n } from "@/i18n";
 import { hba1cToScaled } from "@/lib/format";
 
@@ -18,6 +19,7 @@ function suggestCode(): string {
 export function LaunchStudyForm({ onDone }: { onDone?: () => void }) {
   const { t } = useI18n();
   const { launchStudy, busyKey, studies } = useChain();
+  const platformReady = usePlatformSessionReady();
   const [code] = useState(suggestCode);
   const [error, setError] = useState<string | null>(null);
   const busy = busyKey === "launch";
@@ -147,7 +149,7 @@ export function LaunchStudyForm({ onDone }: { onDone?: () => void }) {
         <p className="text-xs text-slate-500">{t("lab.paidOffline")}</p>
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
-        <Button type="submit" disabled={busy} full>
+        <Button type="submit" disabled={busy || !platformReady} full>
           {busy ? (
             <>
               <Spinner /> {t("lab.launching")}

@@ -1,12 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Spinner, cx } from "@/components/ui";
+import { cx } from "@/components/ui";
 import { useRole } from "@/features/role/RoleProvider";
 import { LOGIN_ROLES, ROLE_DEFINITIONS, type AppRole } from "@/features/role/roles";
-import { useWallet } from "@/features/wallet/WalletProvider";
 import { useI18n, type MessageKey } from "@/i18n";
-import { truncateAddress } from "@/lib/format";
 
 type RoleCardStyle = {
   ring: string;
@@ -37,20 +35,13 @@ const CARD_STYLES: Record<(typeof LOGIN_ROLES)[number], RoleCardStyle> = {
   },
 };
 
-/**
- * The dual login. Both paths are always usable: a wallet is required to sign
- * anything on-chain, not to choose a role, so a visitor with no extension still
- * gets a working entry point instead of a disabled button.
- */
+/** The dual login. Wallet connect is only shown to patients once they enter. */
 export function RoleEntry() {
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        {LOGIN_ROLES.map((role) => (
-          <RoleCard key={role} role={role} />
-        ))}
-      </div>
-      <WalletStrip />
+    <div className="grid gap-4 sm:grid-cols-2">
+      {LOGIN_ROLES.map((role) => (
+        <RoleCard key={role} role={role} />
+      ))}
     </div>
   );
 }
@@ -147,142 +138,6 @@ function RoleCard({ role }: { role: (typeof LOGIN_ROLES)[number] }) {
         </svg>
       </button>
     </div>
-  );
-}
-
-/** All four wallet states, so no state leaves the visitor with a dead button. */
-function WalletStrip() {
-  const { t } = useI18n();
-  const {
-    walletStatus,
-    walletAddress,
-    walletConnected,
-    isConnecting,
-    connect,
-    disconnect,
-    recheckWallets,
-  } = useWallet();
-
-  if (walletConnected && walletAddress) {
-    return (
-      <Strip tone="success">
-        <StatusDot tone="success" />
-        <span className="min-w-0 flex-1 text-sm text-emerald-100">
-          {t("wallet.connected")}
-          <span className="ml-2 font-mono text-xs text-emerald-300/80">
-            {truncateAddress(walletAddress)}
-          </span>
-        </span>
-        <StripButton onClick={() => void disconnect()}>
-          {t("wallet.disconnect")}
-        </StripButton>
-      </Strip>
-    );
-  }
-
-  if (walletStatus === "checking") {
-    return (
-      <Strip tone="neutral">
-        <Spinner />
-        <span className="min-w-0 flex-1 text-sm text-slate-400">
-          {t("wallet.checking")}
-        </span>
-      </Strip>
-    );
-  }
-
-  if (walletStatus === "not-found") {
-    return (
-      <Strip tone="warning">
-        <StatusDot tone="warning" />
-        <span className="min-w-0 flex-1 text-sm text-amber-100">
-          {t("wallet.install")}
-        </span>
-        <StripButton onClick={recheckWallets}>
-          {t("wallet.checkAgain")}
-        </StripButton>
-      </Strip>
-    );
-  }
-
-  return (
-    <Strip tone="info">
-      <StatusDot tone="info" />
-      <span className="min-w-0 flex-1 text-sm text-cyan-100">
-        {t("wallet.stepBody")}
-      </span>
-      <StripButton onClick={() => void connect()} disabled={isConnecting}>
-        {isConnecting ? t("wallet.connecting") : t("wallet.connect")}
-      </StripButton>
-    </Strip>
-  );
-}
-
-const STRIP_TONES = {
-  success: "border-emerald-400/25 bg-emerald-400/[0.07]",
-  warning: "border-amber-400/25 bg-amber-400/[0.07]",
-  info: "border-cyan-400/25 bg-cyan-400/[0.06]",
-  neutral: "border-white/10 bg-white/[0.03]",
-} as const;
-
-const DOT_TONES = {
-  success: "bg-emerald-400",
-  warning: "bg-amber-400",
-  info: "bg-cyan-400",
-  neutral: "bg-slate-500",
-} as const;
-
-function Strip({
-  tone,
-  children,
-}: {
-  tone: keyof typeof STRIP_TONES;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cx(
-        "flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 backdrop-blur",
-        STRIP_TONES[tone],
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function StatusDot({ tone }: { tone: keyof typeof DOT_TONES }) {
-  return (
-    <span aria-hidden className="relative grid h-2.5 w-2.5 shrink-0 place-items-center">
-      <span
-        className={cx(
-          "mn-animate-pulse-ring absolute inset-0 rounded-full",
-          DOT_TONES[tone],
-        )}
-      />
-      <span className={cx("h-2 w-2 rounded-full", DOT_TONES[tone])} />
-    </span>
-  );
-}
-
-function StripButton({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
 

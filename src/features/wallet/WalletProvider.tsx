@@ -6,12 +6,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { createMidnightProtocol, sanitizeError } from "@/lib/midnight";
 import type { MidnightHealthProtocol } from "@/lib/midnight";
-import { deployPolarisContract } from "@/lib/midnight/factory";
 import {
   createWalletAdapter,
   detectInjectedWallets,
@@ -23,6 +24,9 @@ import {
 } from "@/lib/wallet";
 
 export type AppError = { code: string; message: string };
+
+/** Remembers which extension was last authorized so role changes keep the session. */
+const WALLET_NAME_KEY = "polaris:wallet-name";
 
 type WalletValue = {
   bindingsReady: boolean;
@@ -47,6 +51,13 @@ type WalletValue = {
   setContractAddress: (address: string) => void;
   forgetContractAddress: () => void;
 
+  /** Unshielded NIGHT in the connected wallet (null until fetched). */
+  unshieldedBalanceNight: number | null;
+  refreshWalletBalance: () => Promise<void>;
+  /** Set after deploy — VaultPanel should prompt to fund. */
+  requestVaultFund: boolean;
+  clearFundPrompt: () => void;
+
   error: AppError | null;
   setError: (error: AppError | null) => void;
   reportError: (error: unknown) => AppError;
@@ -54,7 +65,20 @@ type WalletValue = {
 
 const WalletContext = createContext<WalletValue | null>(null);
 
+function readPersistedWalletName(): string | null {
+  if (typeof window === "undefined") return null;
+  const value = window.localStorage.getItem(WALLET_NAME_KEY);
+  return value && value.length > 0 ? value : null;
+}
+
+function persistWalletName(name: string | null): void {
+  if (typeof window === "undefined") return;
+  if (name) window.localStorage.setItem(WALLET_NAME_KEY, name);
+  else window.localStorage.removeItem(WALLET_NAME_KEY);
+}
+
 export function WalletProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const bindingsReady =
     process.env.NEXT_PUBLIC_POLARIS_BINDINGS_READY === "true";
 
@@ -71,21 +95,45 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [networkId, setNetworkId] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [detectionRun, setDetectionRun] = useState(0);
+  const connectingRef = useRef(false);
+  const restoreAttemptedRef = useRef(false);
 
   const [contractAddress, setContractAddressState] = useState<string | null>(
     null,
   );
   const [isDeploying, setIsDeploying] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
+  const [unshieldedBalanceNight, setUnshieldedBalanceNight] = useState<
+    number | null
+  >(null);
+  const [requestVaultFund, setRequestVaultFund] = useState(false);
+
+  const refreshWalletBalance = useCallback(async () => {
+    if (!wallet.getUnshieldedBalanceNight || !wallet.isConnected()) {
+      setUnshieldedBalanceNight(null);
+      return;
+    }
+    try {
+      const balance = await wallet.getUnshieldedBalanceNight();
+      setUnshieldedBalanceNight(balance);
+    } catch (raw) {
+      console.error("[polaris] wallet balance", raw);
+      setUnshieldedBalanceNight(null);
+    }
+  }, [wallet]);
+
+  const clearFundPrompt = useCallback(() => {
+    setRequestVaultFund(false);
+  }, []);
 
   // The extension injects asynchronously, so detection polls rather than
   // reading window.midnight once.
   useEffect(() => {
     let cancelled = false;
-    void detectInjectedWallets().then(({ status }) => {
+    void detectInjectedWallets().then(({ status, wallets }) => {
       if (cancelled) return;
       setWalletStatus(status);
-      setAvailableWallets(listWallets().map((w) => w.name));
+      setAvailableWallets(wallets.map((w) => w.name));
     });
     return () => {
       cancelled = true;
@@ -94,6 +142,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const recheckWallets = useCallback(() => {
     setWalletStatus("checking");
+    restoreAttemptedRef.current = false;
     setDetectionRun((n) => n + 1);
   }, []);
 
@@ -108,39 +157,76 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const reportError = useCallback((raw: unknown): AppError => {
     const sanitized = sanitizeError(raw);
+    // Raw cause stays in the console for operators; the banner only shows codes.
+    console.error("[polaris]", sanitized.code, raw);
     setError(sanitized);
     return sanitized;
   }, []);
 
   const connect = useCallback(
     async (name?: string) => {
-      if (isConnecting) return;
+      if (connectingRef.current) return;
+      connectingRef.current = true;
       setIsConnecting(true);
       try {
-        const address = await wallet.connect(getMidnightNetworkId(), name);
+        const preferred =
+          name ?? walletName ?? readPersistedWalletName() ?? undefined;
+        const address = await wallet.connect(
+          getMidnightNetworkId(),
+          preferred,
+        );
+        const resolvedName = wallet.getWalletName?.() ?? preferred ?? null;
         setWalletAddress(address);
-        setWalletName(wallet.getWalletName?.() ?? name ?? null);
+        setWalletName(resolvedName);
         setNetworkId(wallet.getNetworkId?.() ?? getMidnightNetworkId());
         setWalletStatus("detected");
+        setAvailableWallets(listWallets().map((w) => w.name));
+        persistWalletName(resolvedName);
         setError(null);
         const { loadPersistedContractAddress } = await import(
           "@/lib/midnight/runtime"
         );
         setContractAddressState(loadPersistedContractAddress());
+        await refreshWalletBalance();
       } catch (raw) {
         reportError(raw);
       } finally {
+        connectingRef.current = false;
         setIsConnecting(false);
       }
     },
-    [isConnecting, reportError, wallet],
+    [reportError, refreshWalletBalance, wallet, walletName],
   );
+
+  // Re-authorize silently after role navigation / reload — but never on the
+  // landing page. connect() loads session.ts → compact-runtime / ledger WASM.
+  useEffect(() => {
+    if (pathname === "/") {
+      restoreAttemptedRef.current = false;
+      return;
+    }
+    if (walletStatus !== "detected") return;
+    if (walletAddress || connectingRef.current) return;
+    if (restoreAttemptedRef.current) return;
+    const saved = readPersistedWalletName();
+    if (!saved) return;
+    // Prefer an exact injected match; fall back to first available wallet.
+    const names = listWallets().map((w) => w.name);
+    const target =
+      names.find((n) => n.toLowerCase() === saved.toLowerCase()) ?? names[0];
+    if (!target) return;
+    restoreAttemptedRef.current = true;
+    void connect(target);
+  }, [connect, pathname, walletAddress, walletStatus]);
 
   const disconnect = useCallback(async () => {
     await wallet.disconnect();
     setWalletAddress(null);
     setWalletName(null);
     setNetworkId(null);
+    setUnshieldedBalanceNight(null);
+    persistWalletName(null);
+    restoreAttemptedRef.current = true; // do not auto-reconnect after an explicit sign-out
     setError(null);
   }, [wallet]);
 
@@ -168,15 +254,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const deploy = useCallback(async () => {
     setIsDeploying(true);
     try {
+      // Keep Compact/session WASM out of the eager WalletProvider graph.
+      const { deployPolarisContract } = await import("@/lib/midnight/factory");
       const address = await deployPolarisContract();
       setContractAddressState(address);
+      setRequestVaultFund(true);
       setError(null);
+      await refreshWalletBalance();
     } catch (raw) {
       reportError(raw);
     } finally {
       setIsDeploying(false);
     }
-  }, [reportError]);
+  }, [refreshWalletBalance, reportError]);
 
   const value = useMemo<WalletValue>(
     () => ({
@@ -187,7 +277,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       availableWallets,
       walletName,
       walletAddress,
-      walletConnected: Boolean(walletAddress) && wallet.isConnected(),
+      // Trust React state as source of truth for the UI; the adapter is kept in
+      // sync by connect/disconnect and rolls back on failed attempts.
+      walletConnected: Boolean(walletAddress),
       networkId,
       isConnecting,
       connect,
@@ -198,6 +290,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       deploy,
       setContractAddress,
       forgetContractAddress,
+      unshieldedBalanceNight,
+      refreshWalletBalance,
+      requestVaultFund,
+      clearFundPrompt,
       error,
       setError,
       reportError,
@@ -205,6 +301,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [
       availableWallets,
       bindingsReady,
+      clearFundPrompt,
       connect,
       contractAddress,
       deploy,
@@ -216,8 +313,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       networkId,
       protocol,
       recheckWallets,
+      refreshWalletBalance,
       reportError,
+      requestVaultFund,
       setContractAddress,
+      unshieldedBalanceNight,
       wallet,
       walletAddress,
       walletName,
@@ -235,4 +335,3 @@ export function useWallet(): WalletValue {
   if (!ctx) throw new Error("useWallet must be used within WalletProvider");
   return ctx;
 }
-

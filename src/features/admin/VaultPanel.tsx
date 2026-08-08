@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import { nightToUsd } from "@/domain/pricing";
 import { useChain } from "@/features/chain/ChainProvider";
+import { useWallet } from "@/features/wallet/WalletProvider";
 import { useI18n } from "@/i18n";
 
 /**
@@ -22,9 +23,18 @@ import { useI18n } from "@/i18n";
 export function VaultPanel() {
   const { t, formatNumber } = useI18n();
   const { vault, studies, busyKey, fundVault, withdrawVault } = useChain();
+  const {
+    unshieldedBalanceNight,
+    refreshWalletBalance,
+    requestVaultFund,
+    clearFundPrompt,
+    walletConnected,
+  } = useWallet();
   const [fundAmount, setFundAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [recipient, setRecipient] = useState("");
+  const [fundDraftTouched, setFundDraftTouched] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const funding = busyKey === "vault:fund";
   const withdrawing = busyKey === "vault:withdraw";
@@ -36,11 +46,40 @@ export function VaultPanel() {
   const payoutsCovered =
     typicalReward > 0 ? Math.floor(vault.balanceNight / typicalReward) : 0;
 
-  // Only a vault that was actually read can be reported as empty or low.
   const empty = vault.known && vault.balanceNight <= 0;
   const low = vault.known && !empty && typicalReward > 0 && payoutsCovered < 3;
 
+  const applyWalletBalanceDraft = () => {
+    if (unshieldedBalanceNight === null || unshieldedBalanceNight <= 0) return;
+    const whole = Math.floor(unshieldedBalanceNight);
+    if (whole > 0) setFundAmount(String(whole));
+  };
+
+  useEffect(() => {
+    if (requestVaultFund && panelRef.current) {
+      panelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [requestVaultFund]);
+
+  useEffect(() => {
+    if (!walletConnected) return;
+    void refreshWalletBalance();
+  }, [refreshWalletBalance, walletConnected, requestVaultFund]);
+
+  useEffect(() => {
+    if (fundDraftTouched) return;
+    if (!requestVaultFund && !(empty && vault.isAdmin)) return;
+    applyWalletBalanceDraft();
+  }, [
+    empty,
+    fundDraftTouched,
+    requestVaultFund,
+    unshieldedBalanceNight,
+    vault.isAdmin,
+  ]);
+
   return (
+    <div ref={panelRef}>
     <Card>
       <SectionHeader
         title={t("admin.vaultTitle")}
@@ -52,11 +91,19 @@ export function VaultPanel() {
         }
       />
 
+      {requestVaultFund ? (
+        <p className="mb-4 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-sm text-cyan-100">
+          {t("admin.fundAfterDeploy")}
+        </p>
+      ) : null}
+
       {!vault.isAdmin ? (
         <p className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
           {t("admin.notAdminBody")}
         </p>
       ) : null}
+
+      <p className="mb-4 text-xs text-slate-500">{t("admin.demoWalletNote")}</p>
 
       <div className="grid gap-2 sm:grid-cols-3">
         <Stat
@@ -101,21 +148,57 @@ export function VaultPanel() {
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2">
         <div className="space-y-3">
+          {walletConnected && unshieldedBalanceNight !== null ? (
+            <p className="text-xs text-slate-400">
+              {t("admin.walletBalance", {
+                amount: formatNumber(unshieldedBalanceNight, {
+                  maximumFractionDigits: 6,
+                }),
+              })}
+            </p>
+          ) : null}
           <Field label={t("admin.fundAmount")}>
             <input
               type="number"
-              min={1}
+              min={0}
+              step="any"
               value={fundAmount}
-              onChange={(e) => setFundAmount(e.target.value)}
+              onChange={(e) => {
+                setFundDraftTouched(true);
+                setFundAmount(e.target.value);
+              }}
               className={inputClass}
             />
           </Field>
+          {unshieldedBalanceNight !== null && unshieldedBalanceNight > 0 ? (
+            <Button
+              variant="ghost"
+              disabled={!vault.isAdmin}
+              onClick={() => {
+                setFundDraftTouched(false);
+                applyWalletBalanceDraft();
+              }}
+            >
+              {t("admin.useWalletBalance")}
+            </Button>
+          ) : null}
           <Button
             full
-            disabled={!vault.isAdmin || funding || Number(fundAmount) <= 0}
+            disabled={
+              !vault.isAdmin ||
+              funding ||
+              Number(fundAmount) <= 0 ||
+              (unshieldedBalanceNight !== null &&
+                Number(fundAmount) > unshieldedBalanceNight)
+            }
             onClick={async () => {
               const ok = await fundVault(Number(fundAmount));
-              if (ok) setFundAmount("");
+              if (ok) {
+                setFundAmount("");
+                setFundDraftTouched(false);
+                clearFundPrompt();
+                void refreshWalletBalance();
+              }
             }}
           >
             {funding ? (
@@ -129,6 +212,7 @@ export function VaultPanel() {
         </div>
 
         <div className="space-y-3">
+          <p className="text-xs text-slate-500">{t("admin.withdrawExplain")}</p>
           <Field label={t("admin.withdrawAmount")}>
             <input
               type="number"
@@ -176,5 +260,6 @@ export function VaultPanel() {
         </div>
       </div>
     </Card>
+    </div>
   );
 }

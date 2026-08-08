@@ -22,6 +22,8 @@ export interface WalletAdapter {
   getNetworkId?(): string;
   /** Name of the injected wallet in use (e.g. "1AM"). */
   getWalletName?(): string | null;
+  /** Unshielded NIGHT available in the connected wallet, if the extension exposes balances. */
+  getUnshieldedBalanceNight?(): Promise<number | null>;
   /** Must throw rather than fabricate a transaction id. */
   signAndSubmit(payload: unknown): Promise<string>;
 }

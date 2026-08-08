@@ -1,5 +1,12 @@
 -- Synthetic seed data for Polaris MVP.
 -- All medical information is fictional. No real patient data.
+--
+-- El lote completo en español (pacientes, medical_studies, studies,
+-- consent_views) vive en:
+--   supabase/migrations/20260808105806_seed_demo_lotes_es.sql
+--
+-- Este archivo mantiene solo las filas mínimas del MVP para entornos que
+-- aplican seed.sql sin re-ejecutar migraciones de datos.
 
 -- Fixed UUIDs match src/domain constants for local fallback parity.
 insert into public.patient_profiles (id, wallet_address, display_alias, created_at)
@@ -64,9 +71,9 @@ insert into public.studies (
 values (
   '33333333-3333-4333-8333-333333333333',
   'STUDY_001',
-  'Type 2 Diabetes Treatment Study',
-  'Privacy-preserving cohort matching for Type 2 Diabetes treatment research. Eligibility is proven without disclosing raw medical values.',
-  'research_lab_demo',
+  'Estudio de tratamiento en diabetes tipo 2',
+  'Emparejamiento de cohorte con privacidad para investigación de tratamiento en diabetes tipo 2. La elegibilidad se demuestra sin revelar valores clínicos en crudo.',
+  'lab_investigacion_demo',
   40,
   'TYPE_2_DIABETES',
   70,

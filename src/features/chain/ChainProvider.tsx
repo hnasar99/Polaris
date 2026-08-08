@@ -95,9 +95,14 @@ type ChainSnapshot = {
 /**
  * One read of everything the UI needs. Ledger reads need a session and compiled
  * bindings, so they degrade to empty instead of hiding the Supabase metadata.
+ *
+ * Never call protocol methods until the wallet is connected — the lazy
+ * MidnightAdapter import statically pulls compact-runtime / ledger WASM, and
+ * that must stay out of the landing client graph.
  */
 async function loadChainSnapshot(
   protocol: MidnightHealthProtocol,
+  canReadLedger: boolean,
 ): Promise<ChainSnapshot> {
   const metadata = await loadStudyMetadata();
   const hexByExternalId = Object.fromEntries(
@@ -113,17 +118,20 @@ async function loadChainSnapshot(
   );
 
   let chainStudies: OnChainStudy[] = [];
-  try {
-    chainStudies = await protocol.readStudies();
-  } catch {
-    chainStudies = [];
-  }
-
   let vault = EMPTY_VAULT;
-  try {
-    vault = await protocol.readVault();
-  } catch {
-    vault = EMPTY_VAULT;
+
+  if (canReadLedger) {
+    try {
+      chainStudies = await protocol.readStudies();
+    } catch {
+      chainStudies = [];
+    }
+
+    try {
+      vault = await protocol.readVault();
+    } catch {
+      vault = EMPTY_VAULT;
+    }
   }
 
   return {
@@ -181,20 +189,20 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      applySnapshot(await loadChainSnapshot(protocol));
+      applySnapshot(await loadChainSnapshot(protocol, walletConnected));
     } catch (raw) {
       reportError(raw);
     } finally {
       setRefreshing(false);
       setLoading(false);
     }
-  }, [applySnapshot, protocol, reportError]);
+  }, [applySnapshot, protocol, reportError, walletConnected]);
 
   useEffect(() => {
     contractRef.current = contractAddress;
     let cancelled = false;
 
-    void loadChainSnapshot(protocol)
+    void loadChainSnapshot(protocol, walletConnected)
       .then((snapshot) => {
         if (cancelled) return;
         // Progress is stored per contract, so it reloads with the address.
@@ -406,6 +414,14 @@ export function ChainProvider({ children }: { children: ReactNode }) {
     async (input: NewStudyInput) => {
       setBusyKey("launch");
       try {
+        if (!contractAddress) {
+          reportError({
+            code: "MIDNIGHT_CONTRACT_ADDRESS_REQUIRED",
+            message: "MIDNIGHT_CONTRACT_ADDRESS_REQUIRED",
+          });
+          return false;
+        }
+
         const hex = toHex(await encodeStudyId(input.externalStudyId));
         let txId: string | undefined;
 

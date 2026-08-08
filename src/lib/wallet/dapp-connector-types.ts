@@ -32,6 +32,8 @@ export interface MidnightServiceUriConfig {
 
 export interface MidnightConnectedAPI {
   getUnshieldedAddress(): Promise<{ unshieldedAddress: string }>;
+  /** 1AM ConnectedAPI — token type → amount in Stars. */
+  getUnshieldedBalances?(): Promise<Record<string, bigint | number | string>>;
   getConfiguration(): Promise<MidnightServiceUriConfig>;
   /** DApp Connector guide; optional on some wallet builds. */
   getConnectionStatus?(): Promise<{ status: "connected" | "disconnected" }>;

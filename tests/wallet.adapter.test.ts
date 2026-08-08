@@ -5,6 +5,7 @@ import { UnconnectedWalletAdapter } from "@/lib/wallet/UnconnectedWalletAdapter"
 import {
   WALLET_EXTENSION_MISSING,
   WALLET_NOT_CONNECTED,
+  WALLET_SESSION_FAILED,
   WALLET_SUBMIT_NOT_WIRED,
   WalletAdapterError,
 } from "@/lib/wallet/errors";
@@ -73,7 +74,6 @@ describe("WalletAdapter stubs", () => {
     );
     await expect(wallet.signAndSubmit({})).rejects.toMatchObject({
       code: WALLET_NOT_CONNECTED,
-      message: WALLET_NOT_CONNECTED,
     });
   });
 
@@ -137,5 +137,41 @@ describe("WalletAdapter stubs", () => {
     ).rejects.toThrow(WALLET_SUBMIT_NOT_WIRED);
     await wallet.disconnect();
     expect(wallet.isConnected()).toBe(false);
+  });
+
+  it("rolls back adapter state when session setup fails so retries can re-prompt", async () => {
+    const { createConnectedSession } = await import("@/lib/midnight/session");
+    vi.mocked(createConnectedSession).mockRejectedValueOnce(
+      new Error("session boom"),
+    );
+
+    const connectedApi = {
+      getUnshieldedAddress: vi.fn(async () => ({
+        unshieldedAddress: "mn_unshielded_test_addr",
+      })),
+      getConfiguration: vi.fn(async () => ({ networkId: "preprod" })),
+      getConnectionStatus: vi.fn(async () => ({
+        status: "connected" as const,
+      })),
+    };
+    const initialApi = {
+      name: "1AM",
+      connect: vi.fn(async () => connectedApi),
+    };
+    (window as MidnightWindow).midnight = {
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee": initialApi,
+    };
+
+    const wallet = new MidnightDappConnectorAdapter();
+    await expect(wallet.connect("preprod")).rejects.toMatchObject({
+      code: WALLET_SESSION_FAILED,
+    });
+    expect(wallet.isConnected()).toBe(false);
+    expect(wallet.getAddress()).toBeNull();
+
+    // Retry after a clean rollback should call the extension again.
+    const address = await wallet.connect("preprod");
+    expect(address).toBe("mn_unshielded_test_addr");
+    expect(initialApi.connect).toHaveBeenCalledTimes(2);
   });
 });

@@ -23,9 +23,15 @@ export {
   selectWallet,
   detectInjectedWallets,
 } from "@/lib/wallet/selectWallet";
+export { readUnshieldedBalanceNight } from "@/lib/wallet/balances";
 export {
   WalletAdapterError,
+  classifyWalletConnectFailure,
   WALLET_NOT_CONNECTED,
   WALLET_EXTENSION_MISSING,
   WALLET_SUBMIT_NOT_WIRED,
+  WALLET_CONNECT_REJECTED,
+  WALLET_NETWORK_MISMATCH,
+  WALLET_SESSION_FAILED,
+  WALLET_SSR,
 } from "@/lib/wallet/errors";

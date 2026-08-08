@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { SetupNotice } from "@/components/Banners";
+import { PlatformSetupNotice, SetupNotice } from "@/components/Banners";
 import { Button, EmptyState } from "@/components/ui";
-import { WalletRequired } from "@/components/WalletPanel";
 import { useChain } from "@/features/chain/ChainProvider";
 import { CohortCard } from "@/features/lab/CohortCard";
 import { LaunchStudyForm } from "@/features/lab/LaunchStudyForm";
@@ -49,7 +48,7 @@ function LabDashboard() {
         </div>
       </header>
 
-      <WalletRequired />
+      <PlatformSetupNotice />
       <SetupNotice />
 
       {showForm ? <LaunchStudyForm onDone={() => setLaunching(false)} /> : null}

@@ -4,6 +4,7 @@ import { Badge, Button, Card, Stat } from "@/components/ui";
 import { nightToUsd } from "@/domain/pricing";
 import type { StudyView } from "@/domain/study/types";
 import { useChain } from "@/features/chain/ChainProvider";
+import { usePlatformSessionReady } from "@/features/wallet/usePlatformSessionReady";
 import { useI18n } from "@/i18n";
 import { hba1cFromScaled } from "@/lib/format";
 import { starsToNight } from "@/lib/midnight/encoding";
@@ -15,6 +16,7 @@ import { starsToNight } from "@/lib/midnight/encoding";
 export function CohortCard({ view }: { view: StudyView }) {
   const { t, formatNumber } = useI18n();
   const { busyKey, closeStudy, vaultCovers } = useChain();
+  const platformReady = usePlatformSessionReady();
   const chain = view.chain;
   const busy = busyKey === `close:${view.externalStudyId}`;
   const covered = vaultCovers(view.rewardAmount);
@@ -108,7 +110,7 @@ export function CohortCard({ view }: { view: StudyView }) {
         {view.active ? (
           <Button
             variant="secondary"
-            disabled={busy || !chain}
+            disabled={busy || !chain || !platformReady}
             onClick={() => void closeStudy(view)}
           >
             {busy ? t("lab.closing") : t("lab.close")}

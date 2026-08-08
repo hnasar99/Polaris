@@ -35,10 +35,7 @@ function isInitialApi(value: unknown): value is MidnightInitialAPI {
 export function selectWallet(preferredName?: string): MidnightInitialAPI {
   const wallets = listWallets();
   if (wallets.length === 0) {
-    throw new WalletAdapterError(
-      "WALLET_EXTENSION_MISSING",
-      WALLET_EXTENSION_MISSING,
-    );
+    throw new WalletAdapterError(WALLET_EXTENSION_MISSING);
   }
   if (preferredName) {
     const requested = wallets.find(

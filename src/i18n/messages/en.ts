@@ -57,7 +57,7 @@ export const en: Messages = {
       "Deploy the contract and keep the liquidity vault funded so participants can be paid.",
     patientPoint1: "Your studies stay on your device",
     patientPoint2: "Criteria matching runs locally",
-    patientPoint3: "Get paid in NIGHT when you consent",
+    patientPoint3: "Get paid in NIGHT when you claim",
     labPoint1: "You publish criteria, never see patients",
     labPoint2: "Follow an aggregate, anonymous cohort",
     labPoint3: "No deposit — the platform vault pays out",
@@ -104,12 +104,14 @@ export const en: Messages = {
     adapterNone: "Not connected",
     pick: "Available wallets",
     required: "Connect your wallet to continue.",
+    patientRequired:
+      "Connect your wallet to prove eligibility, grant consent, and claim rewards.",
     stepLabel: "Before you start",
     stepTitle: "Connect your Midnight wallet",
     stepBody:
       "The wallet signs transactions and receives payouts. You can look around without it, but on-chain actions need one.",
     optionalHint:
-      "You can come in without a wallet — we only ask for it when something needs signing.",
+      "Patients connect a wallet to sign and get paid. Laboratories do not connect one here.",
   },
   contract: {
     title: "MedNight contract",
@@ -182,9 +184,9 @@ export const en: Messages = {
     how3Title: "You prove eligibility with ZK",
     how3Body:
       "The Compact circuit checks age, diagnosis, HbA1c and treatment, and publishes only the result plus a single-use marker.",
-    how4Title: "You consent and get paid",
+    how4Title: "You consent, claim, and get paid",
     how4Body:
-      "Consent is a contract call with a scope and an expiry, revocable whenever you want. The payout comes from the platform vault.",
+      "Consent authorizes participation with a scope and an expiry. Claim transfers NIGHT from the platform vault to your wallet.",
     splitEyebrow: "No small print",
     splitTitle: "What stays private and what is public",
     splitSubtitle:
@@ -210,7 +212,7 @@ export const en: Messages = {
       "One contract, two experiences that never meet with personal data in between.",
     ctaTitle: "Start from your side of the counter",
     ctaSubtitle:
-      "Pick a role to come in. There is no sign-up and no password: your Midnight wallet is your identity.",
+      "Choose patient or laboratory. Only patients connect a wallet to prove, consent, and claim.",
     footerTagline:
       "Private medical records and research matching on Midnight Network.",
     footerBuilt: "Built for Midnight Hack Buenos Aires 2026",
@@ -230,7 +232,8 @@ export const en: Messages = {
     dataEmpty: "No clinical data yet",
     dataEmptyCta: "Upload your first study to see what you qualify for.",
     openVault: "Manage my data",
-    connectFirst: "Connect your wallet to prove eligibility and get paid.",
+    connectFirst:
+      "Connect your wallet to prove eligibility, grant consent, and claim rewards.",
   },
   vault: {
     title: "Private health vault",
@@ -412,7 +415,12 @@ export const en: Messages = {
       "The platform vault cannot cover another {amount} NIGHT payout. Participants will not be able to claim until the platform tops it up.",
     notOnChain: "Not on the ledger yet",
     notOnChainHint:
-      "Metadata is saved. Connect a wallet with the compiled contract to publish it on-chain.",
+      "Metadata is saved. The platform must have the contract deployed and an active session in the admin console to publish on-chain.",
+    platformNoContract:
+      "The platform has not deployed the contract yet. An operator must deploy it from the admin console before studies can be published on-chain.",
+    platformNoSession:
+      "No active platform session. An operator must connect the platform wallet from the admin console.",
+    platformAdminLink: "Open platform console",
     codeTaken: "That code is already used by another research.",
     cohortEmpty: "No proofs yet. Share the research code with your patients.",
   },
@@ -435,13 +443,28 @@ export const en: Messages = {
     withdrawing: "Withdrawing…",
     empty: "The vault is empty. Deposit NIGHT so patients can be paid.",
     low: "Low balance — top up so patients can keep claiming.",
-    isAdmin: "This wallet is the contract admin",
-    notAdmin: "This wallet is not the contract admin",
+    isAdmin: "This browser is the contract admin",
+    notAdmin: "This browser is not the contract admin",
     notAdminBody:
-      "Vault circuits check the admin key sealed at deploy. Connect the browser that deployed this contract, or deploy a new one.",
+      "Admin is not the 1AM wallet — it is a secret stored in this browser at deploy time. If you pasted an address from elsewhere or cleared site data, deploy again here (or use the same Chrome profile that deployed).",
     contractTitle: "Contract configuration",
     contractBody:
       "Deploy the contract once and share this address. Patients and laboratories read and write to it.",
+    deployNeedsWallet:
+      "Connect your 1AM wallet above to enable deployment.",
+    deployNetwork: "Will deploy on network {network} (your connected session).",
+    deploySavedHint:
+      "Address saved in this browser. Fund the vault below so patients can claim.",
+    pasteNotAdmin:
+      "If you paste an address from another deploy, this browser will not be admin and cannot fund the vault.",
+    fundAfterDeploy:
+      "Contract deployed. Deposit NIGHT into the vault — the suggested amount is your unshielded balance (you can edit it).",
+    walletBalance: "Unshielded wallet balance: {amount} NIGHT",
+    useWalletBalance: "Use full wallet balance",
+    demoWalletNote:
+      "Single-wallet demo: fund liquidity here as platform; on /patient the same wallet claims via claimReward. Vault withdraw is platform-only (withdrawVault), not the patient claim.",
+    withdrawExplain:
+      "Platform liquidity withdrawal (withdrawVault). Patients claim on their own via claimReward from /patient.",
   },
   privacy: {
     provedTitle: "Proved with zero knowledge",
@@ -469,10 +492,15 @@ export const en: Messages = {
       "No Midnight wallet found. Install 1AM or Lace, unlock it and check again.",
     WALLET_NOT_CONNECTED: "Connect your wallet first.",
     WALLET_CONNECT_REJECTED: "The wallet rejected the connection.",
+    WALLET_NETWORK_MISMATCH:
+      "Wallet network does not match the app (Polaris uses preprod). Switch 1AM to Preprod and connect again.",
+    WALLET_SESSION_FAILED:
+      "The extension authorized, but Midnight session setup failed. Unlock 1AM, set Preprod, and check the browser console.",
     WALLET_SSR: "The wallet is only available in the browser.",
     WALLET_SUBMIT_NOT_WIRED:
       "The wallet is connected for address and session only. Transaction submit is not wired yet.",
-    MIDNIGHT_SESSION_REQUIRED: "Connect a wallet to open a Midnight session.",
+    MIDNIGHT_SESSION_REQUIRED:
+      "No active Midnight session. Patients connect their wallet; the laboratory uses the platform session from the admin console.",
     MIDNIGHT_CONTRACT_ADDRESS_REQUIRED:
       "No contract address. Deploy the contract or paste an existing one.",
     MIDNIGHT_BINDINGS_MISSING:

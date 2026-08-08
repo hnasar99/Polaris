@@ -22,6 +22,16 @@ const nextConfig: NextConfig = {
       asyncWebAssembly: true,
       topLevelAwait: true,
     };
+    // Midnight ledger/onchain WASM is asyncWebAssembly (async/await glue).
+    // Default browserslist includes op_mini/kaios, which make webpack claim
+    // the target lacks async/await even though the real browser does not.
+    config.output = {
+      ...config.output,
+      environment: {
+        ...config.output?.environment,
+        asyncFunction: true,
+      },
+    };
     return config;
   },
 };

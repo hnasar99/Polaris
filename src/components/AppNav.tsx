@@ -20,6 +20,7 @@ export function AppNav() {
     walletAddress,
     walletConnected,
     walletStatus,
+    availableWallets,
     connect,
     disconnect,
     isConnecting,
@@ -27,6 +28,9 @@ export function AppNav() {
 
   const definition = role ? ROLE_DEFINITIONS[role] : null;
   const onLanding = pathname === "/";
+  // Wallet is patient-only and never on the role picker.
+  const showWallet =
+    !onLanding && (role === "patient" || pathname === "/patient");
 
   const handleSignOut = async () => {
     signOut();
@@ -81,32 +85,42 @@ export function AppNav() {
           </nav>
         ) : null}
 
-        {walletConnected && walletAddress ? (
-          <button
-            type="button"
-            onClick={() => void disconnect()}
-            title={`${walletAddress} — ${t("wallet.disconnect")}`}
-            className="rounded-lg bg-emerald-400/10 px-2.5 py-1 font-mono text-xs text-emerald-200 ring-1 ring-inset ring-emerald-400/20 transition hover:bg-emerald-400/15"
-          >
-            {truncateAddress(walletAddress)}
-          </button>
-        ) : walletStatus === "not-found" ? (
-          <span
-            title={t("wallet.install")}
-            className="rounded-lg bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-200 ring-1 ring-inset ring-amber-400/20"
-          >
-            {t("wallet.notFound")}
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void connect()}
-            disabled={isConnecting || walletStatus === "checking"}
-            className="rounded-lg bg-cyan-400/90 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
-          >
-            {isConnecting ? t("wallet.connecting") : t("wallet.connect")}
-          </button>
-        )}
+        {showWallet ? (
+          walletConnected && walletAddress ? (
+            <button
+              type="button"
+              onClick={() => void disconnect()}
+              title={`${walletAddress} — ${t("wallet.disconnect")}`}
+              className="rounded-lg bg-emerald-400/10 px-2.5 py-1 font-mono text-xs text-emerald-200 ring-1 ring-inset ring-emerald-400/20 transition hover:bg-emerald-400/15"
+            >
+              {truncateAddress(walletAddress)}
+            </button>
+          ) : walletStatus === "not-found" ? (
+            <span
+              title={t("wallet.install")}
+              className="rounded-lg bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-200 ring-1 ring-inset ring-amber-400/20"
+            >
+              {t("wallet.notFound")}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void connect(availableWallets[0])}
+              disabled={
+                isConnecting ||
+                walletStatus === "checking" ||
+                availableWallets.length === 0
+              }
+              className="rounded-lg bg-cyan-400/90 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
+            >
+              {isConnecting
+                ? t("wallet.connecting")
+                : availableWallets[0]
+                  ? `${t("wallet.connect")} · ${availableWallets[0]}`
+                  : t("wallet.connect")}
+            </button>
+          )
+        ) : null}
 
         <LanguageToggle />
       </div>

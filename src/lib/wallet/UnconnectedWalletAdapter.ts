@@ -11,9 +11,7 @@ export class UnconnectedWalletAdapter implements WalletAdapter {
   readonly kind = "unconnected" as const;
 
   connect(): Promise<string> {
-    return Promise.reject(
-      new WalletAdapterError(WALLET_NOT_CONNECTED, WALLET_NOT_CONNECTED),
-    );
+    return Promise.reject(new WalletAdapterError(WALLET_NOT_CONNECTED));
   }
 
   disconnect(): Promise<void> {
@@ -29,8 +27,6 @@ export class UnconnectedWalletAdapter implements WalletAdapter {
   }
 
   signAndSubmit(_payload: unknown): Promise<string> {
-    return Promise.reject(
-      new WalletAdapterError(WALLET_NOT_CONNECTED, WALLET_NOT_CONNECTED),
-    );
+    return Promise.reject(new WalletAdapterError(WALLET_NOT_CONNECTED));
   }
 }
