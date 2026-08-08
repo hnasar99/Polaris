@@ -23,6 +23,8 @@ export const WALLET_SSR = "WALLET_SSR" as const;
 export const WALLET_CONNECT_REJECTED = "WALLET_CONNECT_REJECTED" as const;
 export const WALLET_NETWORK_MISMATCH = "WALLET_NETWORK_MISMATCH" as const;
 export const WALLET_SESSION_FAILED = "WALLET_SESSION_FAILED" as const;
+export const WALLET_LOCKED = "WALLET_LOCKED" as const;
+export const WALLET_CONNECT_TIMEOUT = "WALLET_CONNECT_TIMEOUT" as const;
 
 /**
  * Map a raw extension / session failure into a stable wallet code.
@@ -39,6 +41,16 @@ export function classifyWalletConnectFailure(error: unknown): WalletAdapterError
         ? error
         : "";
   const lower = msg.toLowerCase();
+
+  // A locked extension is the most common connect failure and the only one the
+  // user fixes outside the page, so it must not be folded into "rejected".
+  if (
+    /is locked|wallet locked|locked wallet|unlock|bloquead|desbloque|enter your password|password required/.test(
+      lower,
+    )
+  ) {
+    return new WalletAdapterError(WALLET_LOCKED, msg || WALLET_LOCKED);
+  }
 
   if (
     /reject|denied|deneg|cancel|dismiss|closed by user|user closed|not authorized/.test(

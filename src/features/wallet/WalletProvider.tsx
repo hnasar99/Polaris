@@ -18,6 +18,8 @@ import {
   detectInjectedWallets,
   getMidnightNetworkId,
   listWallets,
+  WALLET_CONNECT_TIMEOUT,
+  WALLET_LOCKED,
   type WalletAdapter,
   type WalletAdapterKind,
   type WalletDetectionStatus,
@@ -41,6 +43,8 @@ type WalletValue = {
   networkId: string | null;
   isConnecting: boolean;
   connect: (walletName?: string) => Promise<void>;
+  /** Stop waiting on an extension that never answered, without a page reload. */
+  cancelConnect: () => void;
   disconnect: () => Promise<void>;
   /** Re-run extension detection, for the "check again" affordance. */
   recheckWallets: () => void;
@@ -97,6 +101,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [detectionRun, setDetectionRun] = useState(0);
   const connectingRef = useRef(false);
   const restoreAttemptedRef = useRef(false);
+  /** Bumped per attempt; a stale attempt that finally answers is ignored. */
+  const attemptRef = useRef(0);
+  /** Wallet to retry once the tab regains focus, after a locked failure. */
+  const unlockRetryRef = useRef<{ walletName?: string } | null>(null);
+  const autoRetryRef = useRef(false);
 
   const [contractAddress, setContractAddressState] = useState<string | null>(
     null,
@@ -165,16 +174,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(
     async (name?: string) => {
-      if (connectingRef.current) return;
+      // Clicking again supersedes the previous attempt instead of being
+      // swallowed by an "already connecting" guard: a locked extension can
+      // leave the first attempt pending, and that used to wedge the button.
+      const attempt = attemptRef.current + 1;
+      attemptRef.current = attempt;
+      const isCurrent = () => attemptRef.current === attempt;
+      unlockRetryRef.current = null;
       connectingRef.current = true;
       setIsConnecting(true);
+      const preferred =
+        name ?? walletName ?? readPersistedWalletName() ?? undefined;
       try {
-        const preferred =
-          name ?? walletName ?? readPersistedWalletName() ?? undefined;
         const address = await wallet.connect(
           getMidnightNetworkId(),
           preferred,
         );
+        if (!isCurrent()) return;
         const resolvedName = wallet.getWalletName?.() ?? preferred ?? null;
         setWalletAddress(address);
         setWalletName(resolvedName);
@@ -189,14 +205,54 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setContractAddressState(loadPersistedContractAddress());
         await refreshWalletBalance();
       } catch (raw) {
-        reportError(raw);
+        if (!isCurrent()) return;
+        const reported = reportError(raw);
+        // The user fixes a locked wallet outside the page, so pick the attempt
+        // back up when they return — but only once per manual attempt.
+        if (
+          !autoRetryRef.current &&
+          (reported.code === WALLET_LOCKED ||
+            reported.code === WALLET_CONNECT_TIMEOUT)
+        ) {
+          unlockRetryRef.current = { walletName: preferred };
+        }
       } finally {
-        connectingRef.current = false;
-        setIsConnecting(false);
+        if (isCurrent()) {
+          connectingRef.current = false;
+          setIsConnecting(false);
+        }
       }
     },
     [reportError, refreshWalletBalance, wallet, walletName],
   );
+
+  const cancelConnect = useCallback(() => {
+    attemptRef.current += 1;
+    unlockRetryRef.current = null;
+    connectingRef.current = false;
+    setIsConnecting(false);
+  }, []);
+
+  // Unlocking happens in the extension, which takes focus away from the tab.
+  useEffect(() => {
+    const resume = () => {
+      const pending = unlockRetryRef.current;
+      if (!pending) return;
+      if (document.visibilityState !== "visible") return;
+      if (walletAddress || connectingRef.current) return;
+      unlockRetryRef.current = null;
+      autoRetryRef.current = true;
+      void connect(pending.walletName).finally(() => {
+        autoRetryRef.current = false;
+      });
+    };
+    window.addEventListener("focus", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.removeEventListener("focus", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [connect, walletAddress]);
 
   // Re-authorize silently after role navigation / reload — but never on the
   // landing page. connect() loads session.ts → compact-runtime / ledger WASM.
@@ -220,6 +276,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [connect, pathname, walletAddress, walletStatus]);
 
   const disconnect = useCallback(async () => {
+    attemptRef.current += 1;
+    unlockRetryRef.current = null;
+    connectingRef.current = false;
+    setIsConnecting(false);
     await wallet.disconnect();
     setWalletAddress(null);
     setWalletName(null);
@@ -283,6 +343,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       networkId,
       isConnecting,
       connect,
+      cancelConnect,
       disconnect,
       recheckWallets,
       contractAddress,
@@ -301,6 +362,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [
       availableWallets,
       bindingsReady,
+      cancelConnect,
       clearFundPrompt,
       connect,
       contractAddress,

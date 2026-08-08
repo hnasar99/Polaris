@@ -89,6 +89,8 @@ export const en: Messages = {
     subtitleReal: "Connect the Midnight extension injected on window.midnight.",
     connect: "Connect wallet",
     connecting: "Connecting…",
+    approveHint:
+      "Approve the request in the extension. If it is locked, unlock it and come back to this tab — the connection resumes on its own.",
     disconnect: "Disconnect",
     connected: "Connected",
     checking: "Looking for a wallet…",
@@ -496,6 +498,10 @@ export const en: Messages = {
       "Wallet network does not match the app (Polaris uses preprod). Switch 1AM to Preprod and connect again.",
     WALLET_SESSION_FAILED:
       "The extension authorized, but Midnight session setup failed. Unlock 1AM, set Preprod, and check the browser console.",
+    WALLET_LOCKED:
+      "The wallet is locked. Unlock 1AM (or Lace) and press Connect wallet again.",
+    WALLET_CONNECT_TIMEOUT:
+      "The wallet never answered the connect request. Open the extension, unlock it, approve the request, and connect again.",
     WALLET_SSR: "The wallet is only available in the browser.",
     WALLET_SUBMIT_NOT_WIRED:
       "The wallet is connected for address and session only. Transaction submit is not wired yet.",

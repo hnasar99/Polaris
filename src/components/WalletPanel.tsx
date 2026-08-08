@@ -17,6 +17,7 @@ export function WalletPanel() {
     unshieldedBalanceNight,
     isConnecting,
     connect,
+    cancelConnect,
     disconnect,
     recheckWallets,
   } = useWallet();
@@ -92,6 +93,17 @@ export function WalletPanel() {
             {t("wallet.checkAgain")}
           </Button>
         </div>
+      ) : isConnecting ? (
+        <div className="space-y-3">
+          <p className="flex items-center gap-2 text-sm text-slate-300">
+            <Spinner />
+            {t("wallet.connecting")}
+          </p>
+          <p className="text-xs text-slate-400">{t("wallet.approveHint")}</p>
+          <Button variant="secondary" onClick={cancelConnect}>
+            {t("common.cancel")}
+          </Button>
+        </div>
       ) : availableWallets.length > 1 ? (
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-500">
@@ -102,7 +114,6 @@ export function WalletPanel() {
               <Button
                 key={name}
                 variant="secondary"
-                disabled={isConnecting}
                 onClick={() => void connect(name)}
               >
                 {name}
@@ -111,11 +122,8 @@ export function WalletPanel() {
           </div>
         </div>
       ) : (
-        <Button
-          disabled={isConnecting}
-          onClick={() => void connect(availableWallets[0])}
-        >
-          {isConnecting ? t("wallet.connecting") : t("wallet.connect")}
+        <Button onClick={() => void connect(availableWallets[0])}>
+          {t("wallet.connect")}
         </Button>
       )}
     </Card>
@@ -130,6 +138,7 @@ export function WalletRequired() {
     walletStatus,
     availableWallets,
     connect,
+    cancelConnect,
     isConnecting,
     recheckWallets,
   } = useWallet();
@@ -157,7 +166,9 @@ export function WalletRequired() {
           ? t("wallet.install")
           : checking
             ? t("wallet.checking")
-            : t("wallet.patientRequired")}
+            : isConnecting
+              ? t("wallet.approveHint")
+              : t("wallet.patientRequired")}
       </p>
       {missing ? (
         <Button variant="secondary" onClick={recheckWallets}>
@@ -165,29 +176,33 @@ export function WalletRequired() {
         </Button>
       ) : checking ? (
         <Spinner />
+      ) : isConnecting ? (
+        <div className="flex items-center gap-2">
+          <Spinner />
+          <Button variant="secondary" onClick={cancelConnect}>
+            {t("common.cancel")}
+          </Button>
+        </div>
       ) : availableWallets.length > 1 ? (
         <div className="flex flex-wrap gap-2">
           {availableWallets.map((name) => (
             <Button
               key={name}
               variant="secondary"
-              disabled={isConnecting}
               onClick={() => void connect(name)}
             >
-              {isConnecting ? t("wallet.connecting") : name}
+              {name}
             </Button>
           ))}
         </div>
       ) : (
         <Button
-          disabled={isConnecting || availableWallets.length === 0}
+          disabled={availableWallets.length === 0}
           onClick={() => void connect(availableWallets[0])}
         >
-          {isConnecting
-            ? t("wallet.connecting")
-            : availableWallets[0]
-              ? `${t("wallet.connect")} · ${availableWallets[0]}`
-              : t("wallet.connect")}
+          {availableWallets[0]
+            ? `${t("wallet.connect")} · ${availableWallets[0]}`
+            : t("wallet.connect")}
         </Button>
       )}
     </div>

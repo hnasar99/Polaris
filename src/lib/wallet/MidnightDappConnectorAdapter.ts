@@ -2,7 +2,10 @@ import type { MidnightNetworkId } from "@/lib/wallet/dapp-connector-types";
 import type { MidnightConnectedAPI } from "@/lib/wallet/dapp-connector-types";
 import {
   WALLET_CONNECT_REJECTED,
+  WALLET_CONNECT_TIMEOUT,
+  WALLET_LOCKED,
   WALLET_NOT_CONNECTED,
+  WALLET_SESSION_FAILED,
   WALLET_SSR,
   WALLET_SUBMIT_NOT_WIRED,
   WalletAdapterError,
@@ -14,6 +17,37 @@ import type { WalletAdapter } from "@/lib/wallet/WalletAdapter";
 import { POLARIS_ZK_ASSET_PATH } from "@/lib/midnight/constants";
 
 const DEFAULT_NETWORK: MidnightNetworkId = "preprod";
+
+/**
+ * A locked extension answers none of these calls: 1AM keeps the request queued
+ * behind its unlock screen and the promise never settles. Without a deadline
+ * the caller stays "connecting" forever and every retry is swallowed, so each
+ * step gets one.
+ */
+const APPROVAL_TIMEOUT_MS = 60_000;
+const ADDRESS_TIMEOUT_MS = 30_000;
+const STATUS_TIMEOUT_MS = 15_000;
+const SESSION_TIMEOUT_MS = 90_000;
+
+function withTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  code: string,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new WalletAdapterError(code, message)),
+        timeoutMs,
+      );
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 /** Opaque session handle — concrete type lives in session.ts (WASM-heavy). */
 export type WalletSessionHandle = {
@@ -62,12 +96,42 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
       const wallet = selectWallet(walletName);
       this.walletName = wallet.name;
 
-      const api = await wallet.connect(networkId);
-      const { unshieldedAddress } = await api.getUnshieldedAddress();
+      const api = await withTimeout(
+        wallet.connect(networkId),
+        APPROVAL_TIMEOUT_MS,
+        WALLET_CONNECT_TIMEOUT,
+        `${wallet.name} never answered connect(${networkId}) — locked extension or an approval popup that was never opened.`,
+      );
+
+      // The dApp can already be authorized from a previous visit, in which case
+      // connect() resolves with no popup and this is the call that blocks on the
+      // unlock screen.
+      const { unshieldedAddress } = await withTimeout(
+        api.getUnshieldedAddress(),
+        ADDRESS_TIMEOUT_MS,
+        WALLET_LOCKED,
+        `${wallet.name} authorized the dApp but returned no address — the wallet is locked.`,
+      );
 
       if (typeof api.getConnectionStatus === "function") {
-        const status = await api.getConnectionStatus();
-        if (status.status !== "connected") {
+        // A timeout here is not fatal: the address above already proves the
+        // wallet is unlocked and authorized.
+        const status = await withTimeout(
+          api.getConnectionStatus(),
+          STATUS_TIMEOUT_MS,
+          WALLET_CONNECT_TIMEOUT,
+          `${wallet.name} did not report a connection status.`,
+        ).catch((error: unknown) => {
+          if (
+            error instanceof WalletAdapterError &&
+            error.code === WALLET_CONNECT_TIMEOUT
+          ) {
+            console.warn("[polaris] wallet getConnectionStatus timed out");
+            return null;
+          }
+          throw error;
+        });
+        if (status && status.status !== "connected") {
           throw new WalletAdapterError(WALLET_CONNECT_REJECTED);
         }
       }
@@ -82,7 +146,12 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
           import("@/lib/midnight/secret"),
         ]);
 
-      const session = await createConnectedSession(api, POLARIS_ZK_ASSET_PATH);
+      const session = await withTimeout(
+        createConnectedSession(api, POLARIS_ZK_ASSET_PATH),
+        SESSION_TIMEOUT_MS,
+        WALLET_SESSION_FAILED,
+        "Midnight session setup did not finish (wallet configuration, shielded keys or ZK assets).",
+      );
       this.session = session;
       this.networkId = session.config?.networkId ?? networkId;
       runtime.setMidnightSession(session);

@@ -90,6 +90,8 @@ export const es = {
     subtitleReal: "Conectá la extensión de Midnight inyectada en window.midnight.",
     connect: "Conectar billetera",
     connecting: "Conectando…",
+    approveHint:
+      "Aprobá el pedido en la extensión. Si está bloqueada, desbloqueala y volvé a esta pestaña — la conexión sigue sola.",
     disconnect: "Desconectar",
     connected: "Conectada",
     checking: "Buscando billetera…",
@@ -500,6 +502,10 @@ export const es = {
       "La red de la billetera no coincide con la app (Polaris usa preprod). En 1AM elegí la red Preprod y volvé a conectar.",
     WALLET_SESSION_FAILED:
       "La extensión autorizó, pero falló al armar la sesión Midnight. Revisá que 1AM esté desbloqueada, en preprod, y mirá la consola del navegador.",
+    WALLET_LOCKED:
+      "La billetera está bloqueada. Desbloqueá 1AM (o Lace) y volvé a apretar Conectar billetera.",
+    WALLET_CONNECT_TIMEOUT:
+      "La billetera no respondió al pedido de conexión. Abrí la extensión, desbloqueala, aprobá el pedido y conectá de nuevo.",
     WALLET_SSR: "La billetera solo está disponible en el navegador.",
     WALLET_SUBMIT_NOT_WIRED:
       "La billetera está conectada solo para dirección y sesión. El envío de transacciones todavía no está cableado.",

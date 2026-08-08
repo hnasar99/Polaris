@@ -3,11 +3,14 @@ import { createWalletAdapter } from "@/lib/wallet/factory";
 import { MidnightDappConnectorAdapter } from "@/lib/wallet/MidnightDappConnectorAdapter";
 import { UnconnectedWalletAdapter } from "@/lib/wallet/UnconnectedWalletAdapter";
 import {
+  WALLET_CONNECT_TIMEOUT,
   WALLET_EXTENSION_MISSING,
+  WALLET_LOCKED,
   WALLET_NOT_CONNECTED,
   WALLET_SESSION_FAILED,
   WALLET_SUBMIT_NOT_WIRED,
   WalletAdapterError,
+  classifyWalletConnectFailure,
 } from "@/lib/wallet/errors";
 import { listWallets, selectWallet } from "@/lib/wallet/selectWallet";
 
@@ -173,5 +176,68 @@ describe("WalletAdapter stubs", () => {
     const address = await wallet.connect("preprod");
     expect(address).toBe("mn_unshielded_test_addr");
     expect(initialApi.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("times out instead of hanging when a locked extension never answers connect", async () => {
+    vi.useFakeTimers();
+    try {
+      const initialApi = {
+        name: "1AM",
+        connect: vi.fn(() => new Promise<never>(() => {})),
+      };
+      (window as MidnightWindow).midnight = {
+        "99999999-8888-7777-6666-555555555555": initialApi,
+      };
+
+      const wallet = new MidnightDappConnectorAdapter();
+      const attempt = wallet.connect("preprod");
+      const rejection = expect(attempt).rejects.toMatchObject({
+        code: WALLET_CONNECT_TIMEOUT,
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await rejection;
+      expect(wallet.isConnected()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a locked wallet when an authorized extension never returns an address", async () => {
+    vi.useFakeTimers();
+    try {
+      const connectedApi = {
+        getUnshieldedAddress: vi.fn(() => new Promise<never>(() => {})),
+        getConfiguration: vi.fn(async () => ({ networkId: "preprod" })),
+      };
+      const initialApi = {
+        name: "1AM",
+        connect: vi.fn(async () => connectedApi),
+      };
+      (window as MidnightWindow).midnight = {
+        "12121212-3434-5656-7878-909090909090": initialApi,
+      };
+
+      const wallet = new MidnightDappConnectorAdapter();
+      const attempt = wallet.connect("preprod");
+      const rejection = expect(attempt).rejects.toMatchObject({
+        code: WALLET_LOCKED,
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      await rejection;
+      expect(wallet.isConnected()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("classifies a locked-wallet message as WALLET_LOCKED, not rejected", () => {
+    expect(
+      classifyWalletConnectFailure(new Error("Wallet is locked")).code,
+    ).toBe(WALLET_LOCKED);
+    expect(
+      classifyWalletConnectFailure(
+        new Error("Please unlock your wallet to continue"),
+      ).code,
+    ).toBe(WALLET_LOCKED);
   });
 });
