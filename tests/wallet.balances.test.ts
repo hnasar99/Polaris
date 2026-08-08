@@ -9,7 +9,7 @@ describe("readUnshieldedBalanceNight", () => {
         night: 3_500_000n,
         other: 500_000n,
       }),
-    } as MidnightConnectedAPI;
+    } as unknown as MidnightConnectedAPI;
 
     expect(await readUnshieldedBalanceNight(api)).toBe(4);
   });
