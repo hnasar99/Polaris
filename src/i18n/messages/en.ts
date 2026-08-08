@@ -102,6 +102,9 @@ export const en: Messages = {
     checkAgain: "Check again",
     unshieldedAddress: "Unshielded address",
     network: "Network",
+    networkPick: "Network",
+    networkHint:
+      "Pick the network your funds are on. It must match the one selected in the wallet extension. Each network has its own contract deployment.",
     adapterConnector: "Midnight DApp Connector (window.midnight)",
     adapterNone: "Not connected",
     pick: "Available wallets",
@@ -495,9 +498,9 @@ export const en: Messages = {
     WALLET_NOT_CONNECTED: "Connect your wallet first.",
     WALLET_CONNECT_REJECTED: "The wallet rejected the connection.",
     WALLET_NETWORK_MISMATCH:
-      "Wallet network does not match the app (Polaris uses preprod). Switch 1AM to Preprod and connect again.",
+      "Wallet network does not match the app (Polaris is on {network}). Switch the wallet to {network}, or pick another network in the wallet panel.",
     WALLET_SESSION_FAILED:
-      "The extension authorized, but Midnight session setup failed. Unlock 1AM, set Preprod, and check the browser console.",
+      "The extension authorized, but Midnight session setup failed. Unlock the wallet, check it is on {network}, and check the browser console.",
     WALLET_LOCKED:
       "The wallet is locked. Unlock 1AM (or Lace) and press Connect wallet again.",
     WALLET_CONNECT_TIMEOUT:

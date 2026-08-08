@@ -14,10 +14,15 @@ export type {
 } from "@/lib/wallet/dapp-connector-types";
 export type { WalletDetectionStatus } from "@/lib/wallet/selectWallet";
 export { UnconnectedWalletAdapter } from "@/lib/wallet/UnconnectedWalletAdapter";
+export { createWalletAdapter } from "@/lib/wallet/factory";
 export {
-  createWalletAdapter,
+  getConfiguredNetworkId,
   getMidnightNetworkId,
-} from "@/lib/wallet/factory";
+  isMidnightNetworkId,
+  listSelectableNetworks,
+  networkStore,
+  resolveNetworkId,
+} from "@/lib/wallet/network";
 export {
   listWallets,
   selectWallet,

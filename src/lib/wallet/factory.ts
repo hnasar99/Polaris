@@ -11,7 +11,3 @@ import type { WalletAdapter } from "@/lib/wallet/WalletAdapter";
 export function createWalletAdapter(): WalletAdapter {
   return new MidnightDappConnectorAdapter();
 }
-
-export function getMidnightNetworkId(): string {
-  return process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK ?? "preprod";
-}

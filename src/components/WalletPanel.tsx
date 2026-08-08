@@ -5,6 +5,44 @@ import { useWallet } from "@/features/wallet/WalletProvider";
 import { useI18n } from "@/i18n";
 import { truncateAddress } from "@/lib/format";
 
+/**
+ * Funds live on one network at a time, so the network is a user choice rather
+ * than a build-time constant. Switching reopens the session on the new network.
+ */
+function NetworkSwitch() {
+  const { t } = useI18n();
+  const { availableNetworks, selectedNetwork, setNetwork, isConnecting } =
+    useWallet();
+
+  if (availableNetworks.length < 2) return null;
+
+  return (
+    <div className="mb-4 space-y-2">
+      <p className="text-xs uppercase tracking-wide text-slate-500">
+        {t("wallet.networkPick")}
+      </p>
+      <div
+        role="group"
+        aria-label={t("wallet.networkPick")}
+        className="flex flex-wrap gap-2"
+      >
+        {availableNetworks.map((network) => (
+          <Button
+            key={network}
+            variant={network === selectedNetwork ? "primary" : "secondary"}
+            aria-pressed={network === selectedNetwork}
+            disabled={isConnecting}
+            onClick={() => void setNetwork(network)}
+          >
+            {network}
+          </Button>
+        ))}
+      </div>
+      <p className="text-xs text-slate-500">{t("wallet.networkHint")}</p>
+    </div>
+  );
+}
+
 export function WalletPanel() {
   const { t, formatNumber } = useI18n();
   const {
@@ -49,6 +87,8 @@ export function WalletPanel() {
           </Badge>
         }
       />
+
+      <NetworkSwitch />
 
       {walletConnected && walletAddress ? (
         <div className="space-y-3">

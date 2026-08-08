@@ -12,11 +12,10 @@ import {
   classifyWalletConnectFailure,
 } from "@/lib/wallet/errors";
 import { readUnshieldedBalanceNight } from "@/lib/wallet/balances";
+import { getMidnightNetworkId } from "@/lib/wallet/network";
 import { selectWallet } from "@/lib/wallet/selectWallet";
 import type { WalletAdapter } from "@/lib/wallet/WalletAdapter";
 import { POLARIS_ZK_ASSET_PATH } from "@/lib/midnight/constants";
-
-const DEFAULT_NETWORK: MidnightNetworkId = "preprod";
 
 /**
  * A locked extension answers none of these calls: 1AM keeps the request queued
@@ -73,11 +72,11 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
   private address: string | null = null;
   private connectedApi: MidnightConnectedAPI | null = null;
   private session: WalletSessionHandle | null = null;
-  private networkId: MidnightNetworkId | string = DEFAULT_NETWORK;
+  private networkId: MidnightNetworkId | string = getMidnightNetworkId();
   private walletName: string | null = null;
 
   async connect(
-    networkId: MidnightNetworkId | string = DEFAULT_NETWORK,
+    networkId: MidnightNetworkId | string = getMidnightNetworkId(),
     walletName?: string,
   ): Promise<string> {
     if (typeof window === "undefined") {
@@ -176,7 +175,7 @@ export class MidnightDappConnectorAdapter implements WalletAdapter {
 
   async disconnect(): Promise<void> {
     this.resetLocal();
-    this.networkId = DEFAULT_NETWORK;
+    this.networkId = getMidnightNetworkId();
     const { clearMidnightRuntime } = await import("@/lib/midnight/runtime");
     clearMidnightRuntime();
   }

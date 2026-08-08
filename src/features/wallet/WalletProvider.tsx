@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
@@ -17,9 +18,13 @@ import {
   createWalletAdapter,
   detectInjectedWallets,
   getMidnightNetworkId,
+  listSelectableNetworks,
   listWallets,
+  networkStore,
+  resolveNetworkId,
   WALLET_CONNECT_TIMEOUT,
   WALLET_LOCKED,
+  type MidnightNetworkId,
   type WalletAdapter,
   type WalletAdapterKind,
   type WalletDetectionStatus,
@@ -40,7 +45,13 @@ type WalletValue = {
   walletName: string | null;
   walletAddress: string | null;
   walletConnected: boolean;
+  /** Network reported by the open session, once connected. */
   networkId: string | null;
+  /** Network the next connect() will target. */
+  selectedNetwork: MidnightNetworkId;
+  availableNetworks: MidnightNetworkId[];
+  /** Switch networks: closes the session and reopens it on the new one. */
+  setNetwork: (network: MidnightNetworkId) => Promise<void>;
   isConnecting: boolean;
   connect: (walletName?: string) => Promise<void>;
   /** Stop waiting on an extension that never answered, without a page reload. */
@@ -97,6 +108,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletName, setWalletName] = useState<string | null>(null);
   const [networkId, setNetworkId] = useState<string | null>(null);
+  /**
+   * The stored choice is read through an external store so the server render and
+   * hydration agree, then React re-renders with the real preference.
+   */
+  const storedNetwork = useSyncExternalStore(
+    networkStore.subscribe,
+    networkStore.getSnapshot,
+    networkStore.getServerSnapshot,
+  );
+  const selectedNetwork = resolveNetworkId(storedNetwork);
+  const availableNetworks = useMemo(() => listSelectableNetworks(), []);
   const [isConnecting, setIsConnecting] = useState(false);
   const [detectionRun, setDetectionRun] = useState(0);
   const connectingRef = useRef(false);
@@ -290,6 +312,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, [wallet]);
 
+  const setNetwork = useCallback(
+    async (next: MidnightNetworkId) => {
+      if (next === selectedNetwork) return;
+      const reconnectAs = walletAddress
+        ? (walletName ?? readPersistedWalletName() ?? undefined)
+        : null;
+
+      // The open session is bound to the old network's indexer and ledger id, so
+      // it cannot be reused — close it before switching.
+      await disconnect();
+      networkStore.set(next);
+      // The prompt refers to a vault that does not exist on the new network.
+      setRequestVaultFund(false);
+
+      // A deploy only exists on one network; pick up the address stored for the
+      // new one (usually none, which surfaces as "not deployed").
+      const { loadPersistedContractAddress } = await import(
+        "@/lib/midnight/runtime"
+      );
+      setContractAddressState(loadPersistedContractAddress());
+
+      if (reconnectAs !== null) {
+        restoreAttemptedRef.current = true;
+        await connect(reconnectAs);
+      }
+    },
+    [connect, disconnect, selectedNetwork, walletAddress, walletName],
+  );
+
   const setContractAddress = useCallback((address: string) => {
     const trimmed = address.trim();
     if (!trimmed) return;
@@ -303,7 +354,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const forgetContractAddress = useCallback(() => {
     setContractAddressState(null);
-    window.localStorage.removeItem("polaris:contract-address");
     void import("@/lib/midnight/runtime").then(
       ({ setMidnightContractAddress }) => {
         setMidnightContractAddress(null);
@@ -341,6 +391,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // sync by connect/disconnect and rolls back on failed attempts.
       walletConnected: Boolean(walletAddress),
       networkId,
+      selectedNetwork,
+      availableNetworks,
+      setNetwork,
       isConnecting,
       connect,
       cancelConnect,
@@ -360,6 +413,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       reportError,
     }),
     [
+      availableNetworks,
       availableWallets,
       bindingsReady,
       cancelConnect,
@@ -378,7 +432,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       refreshWalletBalance,
       reportError,
       requestVaultFund,
+      selectedNetwork,
       setContractAddress,
+      setNetwork,
       unshieldedBalanceNight,
       wallet,
       walletAddress,

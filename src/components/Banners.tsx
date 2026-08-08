@@ -6,7 +6,7 @@ import { useWallet } from "@/features/wallet/WalletProvider";
 import { errorMessageKey, useI18n } from "@/i18n";
 
 export function ErrorBanner() {
-  const { error, setError } = useWallet();
+  const { error, setError, selectedNetwork } = useWallet();
   const { t } = useI18n();
   if (!error) return null;
 
@@ -18,7 +18,7 @@ export function ErrorBanner() {
       <div className="mx-auto flex max-w-5xl items-center gap-3">
         <p className="min-w-0 flex-1 text-sm text-rose-100">
           {/* The provider raises a machine code; the wording is chosen here. */}
-          {t(errorMessageKey(error.code))}
+          {t(errorMessageKey(error.code), { network: selectedNetwork })}
         </p>
         <Button variant="ghost" onClick={() => setError(null)}>
           {t("common.dismiss")}

@@ -103,6 +103,9 @@ export const es = {
     checkAgain: "Buscar de nuevo",
     unshieldedAddress: "Dirección unshielded",
     network: "Red",
+    networkPick: "Red",
+    networkHint:
+      "Elegí la red donde tenés los fondos. Tiene que coincidir con la red elegida en la extensión. Cada red tiene su propio despliegue del contrato.",
     adapterConnector: "DApp Connector de Midnight (window.midnight)",
     adapterNone: "Sin conectar",
     pick: "Billeteras disponibles",
@@ -499,9 +502,9 @@ export const es = {
     WALLET_NOT_CONNECTED: "Conectá tu billetera primero.",
     WALLET_CONNECT_REJECTED: "La billetera rechazó la conexión.",
     WALLET_NETWORK_MISMATCH:
-      "La red de la billetera no coincide con la app (Polaris usa preprod). En 1AM elegí la red Preprod y volvé a conectar.",
+      "La red de la billetera no coincide con la app (Polaris está en {network}). Cambiá la billetera a {network}, o elegí otra red en el panel de billetera.",
     WALLET_SESSION_FAILED:
-      "La extensión autorizó, pero falló al armar la sesión Midnight. Revisá que 1AM esté desbloqueada, en preprod, y mirá la consola del navegador.",
+      "La extensión autorizó, pero falló al armar la sesión Midnight. Revisá que la billetera esté desbloqueada, en {network}, y mirá la consola del navegador.",
     WALLET_LOCKED:
       "La billetera está bloqueada. Desbloqueá 1AM (o Lace) y volvé a apretar Conectar billetera.",
     WALLET_CONNECT_TIMEOUT:
